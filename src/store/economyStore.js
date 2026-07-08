@@ -3,8 +3,24 @@ import {
   AD_REVENUE_BY_TIER,
   DEFAULT_AD_TIER,
   REVENUE_SPLIT,
-  ARPG_TRIGGER_THRESHOLD
+  ARPG_TRIGGER_THRESHOLD,
+  MEGA_POOL_WIN_SPLIT
 } from "../config/economyConfig";
+
+function applyArpgShare(state, amountUsd) {
+  const newShare = state.arpgShareAccumulated + amountUsd;
+  const tokensEarned = Math.floor(newShare / ARPG_TRIGGER_THRESHOLD);
+  const remainder = newShare - tokensEarned * ARPG_TRIGGER_THRESHOLD;
+
+  if (tokensEarned > 0) {
+    return {
+      arpgShareAccumulated: remainder,
+      pendingArpgAwards: state.pendingArpgAwards + tokensEarned,
+      showArpgCongrats: true
+    };
+  }
+  return { arpgShareAccumulated: newShare };
+}
 
 export const useEconomyStore = create((set, get) => ({
   silver: 0,
@@ -25,6 +41,7 @@ export const useEconomyStore = create((set, get) => ({
   isAutoSimulating: false,
 
   showArpgCongrats: false,
+  pendingArpgAwards: 0,
 
   setDetectedTier: (tier, region) =>
     set({ currentAdTier: tier, detectedRegion: region }),
@@ -40,25 +57,44 @@ export const useEconomyStore = create((set, get) => ({
     const megaPoolCut = revenue * REVENUE_SPLIT.MEGA_POOL_SHARE;
 
     set((state) => {
-      const newArpgShare = state.arpgShareAccumulated + arpgCut;
-      const arpgReady = newArpgShare >= ARPG_TRIGGER_THRESHOLD;
-
+      const arpgPatch = applyArpgShare(state, arpgCut);
       return {
         totalAdsWatched: state.totalAdsWatched + 1,
         totalAdRevenueGenerated: state.totalAdRevenueGenerated + revenue,
         walletCashBalance: state.walletCashBalance + cashCut,
         platformRevenueTotal: state.platformRevenueTotal + platformCut,
         megaPoolAccumulated: state.megaPoolAccumulated + megaPoolCut,
-        arpgShareAccumulated: arpgReady
-          ? newArpgShare - ARPG_TRIGGER_THRESHOLD
-          : newArpgShare,
-        showArpgCongrats: arpgReady ? true : state.showArpgCongrats
+        ...arpgPatch
+      };
+    });
+  },
+
+  resolveMegaPoolWin: (wonAmountUsd) => {
+    set((state) => {
+      const amount = Math.min(wonAmountUsd, state.megaPoolAccumulated);
+      const teamCut = amount * MEGA_POOL_WIN_SPLIT.TEAM_SHARE;
+      const userCashCut = amount * MEGA_POOL_WIN_SPLIT.USER_CASH_SHARE;
+      const userArpgCut = amount * MEGA_POOL_WIN_SPLIT.USER_ARPG_SHARE;
+
+      const arpgPatch = applyArpgShare(state, userArpgCut);
+
+      return {
+        megaPoolAccumulated: state.megaPoolAccumulated - amount,
+        platformRevenueTotal: state.platformRevenueTotal + teamCut,
+        walletCashBalance: state.walletCashBalance + userCashCut,
+        ...arpgPatch
       };
     });
   },
 
   dismissArpgCongrats: () => set({ showArpgCongrats: false }),
-  confirmArpgAward: () => set((state) => ({ arpg: state.arpg + 1 })),
+
+  confirmArpgAward: () =>
+    set((state) => ({
+      arpg: state.arpg + state.pendingArpgAwards,
+      pendingArpgAwards: 0,
+      showArpgCongrats: false
+    })),
 
   convertSilverToGold: () =>
     set((state) => {

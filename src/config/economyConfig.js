@@ -1,4 +1,6 @@
-﻿export const AD_REVENUE_BY_TIER = {
+﻿// src/config/economyConfig.js
+
+export const AD_REVENUE_BY_TIER = {
   TIER_1: 0.02,
   TIER_2: 0.01,
   TIER_3: 0.004
@@ -17,6 +19,13 @@ export const REVENUE_SPLIT = {
   ARPG_SHARE: 0.30,
   PLATFORM_SHARE: 0.10,
   MEGA_POOL_SHARE: 0.30
+};
+
+// Applied whenever a user wins a payout from the Mega Pool Wheel.
+export const MEGA_POOL_WIN_SPLIT = {
+  TEAM_SHARE: 0.10,
+  USER_CASH_SHARE: 0.50,
+  USER_ARPG_SHARE: 0.40
 };
 
 export const CONVERSION_RATES = {
