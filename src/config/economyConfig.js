@@ -1,9 +1,13 @@
-﻿// src/config/economyConfig.js
-
-export const AD_REVENUE_BY_TIER = {
+﻿export const AD_REVENUE_BY_TIER = {
   TIER_1: 0.02,
   TIER_2: 0.01,
   TIER_3: 0.004
+};
+
+export const TIER_COUNTRY_MAP = {
+  US: "TIER_1", GB: "TIER_1", CA: "TIER_1", AU: "TIER_1", DE: "TIER_1", CH: "TIER_1",
+  FR: "TIER_2", IT: "TIER_2", ES: "TIER_2", TR: "TIER_2", BR: "TIER_2", RU: "TIER_2",
+  IR: "TIER_3", IN: "TIER_3", PK: "TIER_3", EG: "TIER_3", NG: "TIER_3"
 };
 
 export const DEFAULT_AD_TIER = "TIER_2";
@@ -22,7 +26,7 @@ export const CONVERSION_RATES = {
 };
 
 export const ARPG_USD_VALUE = 0.20;
-export const ARPG_TRIGGER_THRESHOLD = 0.20;
+export const ARPG_TRIGGER_THRESHOLD = 0.02;
 
 export const CASH_REWARD_TIERS = [0.001, 0.01, 0.10];
 

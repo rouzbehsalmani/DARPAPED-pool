@@ -1,6 +1,4 @@
-﻿// src/store/economyStore.js
-
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import {
   AD_REVENUE_BY_TIER,
   DEFAULT_AD_TIER,
@@ -23,11 +21,13 @@ export const useEconomyStore = create((set, get) => ({
   totalAdRevenueGenerated: 0,
 
   currentAdTier: DEFAULT_AD_TIER,
+  detectedRegion: "UNKNOWN",
   isAutoSimulating: false,
 
   showArpgCongrats: false,
 
-  setAdTier: (tier) => set({ currentAdTier: tier }),
+  setDetectedTier: (tier, region) =>
+    set({ currentAdTier: tier, detectedRegion: region }),
   setAutoSimulating: (value) => set({ isAutoSimulating: value }),
 
   simulateAdView: () => {
