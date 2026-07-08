@@ -9,9 +9,14 @@ const TopBar = ({ arpgCounterRef }) => {
   const gold = useEconomyStore((s) => s.gold);
   const diamond = useEconomyStore((s) => s.diamond);
   const arpg = useEconomyStore((s) => s.arpg);
+  const walletCashBalance = useEconomyStore((s) => s.walletCashBalance);
 
   return (
     <View style={styles.container}>
+      <View style={styles.counter}>
+        <Text style={styles.icon}>USD</Text>
+        <Text style={styles.value}>${walletCashBalance.toFixed(4)}</Text>
+      </View>
       <View style={styles.counter}>
         <Text style={styles.icon}>Silver</Text>
         <Text style={styles.value}>{silver}</Text>
@@ -41,7 +46,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: "#1A1A2E",
     borderBottomWidth: 1,
-    borderBottomColor: "#2E2E48"
+    borderBottomColor: "#2E2E48",
+    flexWrap: "wrap",
+    rowGap: 8
   },
   counter: {
     flexDirection: "row",

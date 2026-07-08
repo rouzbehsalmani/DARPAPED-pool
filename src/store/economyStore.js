@@ -2,7 +2,8 @@
 
 import { create } from "zustand";
 import {
-  AD_REVENUE_PER_VIEW,
+  AD_REVENUE_BY_TIER,
+  DEFAULT_AD_TIER,
   REVENUE_SPLIT,
   ARPG_TRIGGER_THRESHOLD
 } from "../config/economyConfig";
@@ -21,10 +22,17 @@ export const useEconomyStore = create((set, get) => ({
   totalAdsWatched: 0,
   totalAdRevenueGenerated: 0,
 
+  currentAdTier: DEFAULT_AD_TIER,
+  isAutoSimulating: false,
+
   showArpgCongrats: false,
 
+  setAdTier: (tier) => set({ currentAdTier: tier }),
+  setAutoSimulating: (value) => set({ isAutoSimulating: value }),
+
   simulateAdView: () => {
-    const revenue = AD_REVENUE_PER_VIEW;
+    const { currentAdTier } = get();
+    const revenue = AD_REVENUE_BY_TIER[currentAdTier];
 
     const cashCut = revenue * REVENUE_SPLIT.CASH_SHARE;
     const arpgCut = revenue * REVENUE_SPLIT.ARPG_SHARE;
