@@ -4,9 +4,10 @@ import { useRouter } from "expo-router";
 import { useSettingsStore } from "../src/store/settingsStore";
 
 const VIP_GAMES = [
-  "VIP Scratch Card (zero-dud)",
-  "VIP Slot Machine (guaranteed lines)",
-  "VIP Spin the Wheel (no empty segments)"
+  { key: "vip-scratch-card", label: "VIP Scratch Card (zero-dud)", route: "/vip-scratch-card" },
+  { key: "vip-slot-machine", label: "VIP Slot Machine (guaranteed lines)", route: "/vip-slot-machine" },
+  { key: "vip-spin-wheel", label: "VIP Spin the Wheel (no empty segments)", route: "/vip-spin-wheel" },
+  { key: "vip-lucky-chests", label: "VIP Lucky Chests (zero-dud)", route: "/vip-lucky-chests" }
 ];
 
 export default function VipGamesRoute() {
@@ -38,11 +39,15 @@ export default function VipGamesRoute() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.body}>
         <Text style={styles.title}>VIP Games</Text>
-        {VIP_GAMES.map((name) => (
-          <View key={name} style={styles.gameRow}>
-            <Text style={styles.gameName}>{name}</Text>
-            <Text style={styles.comingSoon}>Coming in Phase 8</Text>
-          </View>
+        {VIP_GAMES.map((game) => (
+          <TouchableOpacity
+            key={game.key}
+            style={styles.gameRow}
+            activeOpacity={0.8}
+            onPress={() => router.push(game.route)}
+          >
+            <Text style={styles.gameName}>{game.label}</Text>
+          </TouchableOpacity>
         ))}
       </View>
     </SafeAreaView>
@@ -73,8 +78,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12
   },
-  gameName: { color: "#FFD700", fontSize: 14, fontWeight: "700", marginBottom: 4 },
-  comingSoon: { color: "#77779A", fontSize: 11 }
+  gameName: { color: "#FFD700", fontSize: 14, fontWeight: "700" }
 });
 
-// FILE LOCATION: app/vip-games.js
+// FILE LOCATION: app/vip-games.js (REPLACE existing file)

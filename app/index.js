@@ -1,16 +1,18 @@
 import React, { useRef } from "react";
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from "react-native";
+import { useRouter } from "expo-router";
 import TopBar from "../src/components/TopBar/TopBar";
 
 const GAMES = [
-  { key: "spin-wheel", label: "Spin the Wheel", desc: "8-segment fortune wheel - materials + small cash", phase: "Phase 3" },
-  { key: "scratch-card", label: "Scratch Card", desc: "Reveal a grid of icons, match 3 to win", phase: "Phase 4" },
-  { key: "slot-machine", label: "Slot Machine", desc: "3-reel classic slots with lever pull", phase: "Phase 5" },
-  { key: "lucky-chests", label: "Lucky Chests", desc: "Pick 1 of 9 chests for a random prize", phase: "Phase 6" }
+  { key: "spin-wheel", label: "Spin the Wheel", desc: "8-segment fortune wheel - materials + small cash", route: "/spin-wheel" },
+  { key: "scratch-card", label: "Scratch Card", desc: "Reveal a grid of icons, match 3 to win", route: "/scratch-card" },
+  { key: "slot-machine", label: "Slot Machine", desc: "3-reel classic slots with lever pull", route: "/slot-machine" },
+  { key: "lucky-chests", label: "Lucky Chests", desc: "Pick 1 of 9 chests for a random prize", route: "/lucky-chests" }
 ];
 
 export default function MainGameSelectionRoute() {
   const arpgCounterRef = useRef(null);
+  const router = useRouter();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -19,10 +21,14 @@ export default function MainGameSelectionRoute() {
         <Text style={styles.title}>Choose a Game</Text>
 
         {GAMES.map((game) => (
-          <TouchableOpacity key={game.key} style={styles.card} activeOpacity={0.8} disabled>
+          <TouchableOpacity
+            key={game.key}
+            style={styles.card}
+            activeOpacity={0.8}
+            onPress={() => router.push(game.route)}
+          >
             <Text style={styles.cardTitle}>{game.label}</Text>
             <Text style={styles.cardDesc}>{game.desc}</Text>
-            <Text style={styles.comingSoon}>Coming in {game.phase}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -43,8 +49,7 @@ const styles = StyleSheet.create({
     borderColor: "#26264A"
   },
   cardTitle: { color: "#FFD700", fontSize: 16, fontWeight: "700", marginBottom: 4 },
-  cardDesc: { color: "#AAAAC0", fontSize: 12, marginBottom: 8 },
-  comingSoon: { color: "#77779A", fontSize: 11 }
+  cardDesc: { color: "#AAAAC0", fontSize: 12 }
 });
 
 // FILE LOCATION: app/index.js (REPLACE existing file)

@@ -1,10 +1,12 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 import {
   AD_REVENUE_BY_TIER,
   DEFAULT_AD_TIER,
   REVENUE_SPLIT,
   ARPG_TRIGGER_THRESHOLD,
-  MEGA_POOL_WIN_SPLIT
+  MEGA_POOL_WIN_SPLIT,
+  MEGA_POOL_PRIZES,
+  MEGA_POOL_SPIN_COOLDOWN_MS
 } from "../config/economyConfig";
 
 function applyArpgShare(state, amountUsd) {
@@ -42,6 +44,8 @@ export const useEconomyStore = create((set, get) => ({
 
   showArpgCongrats: false,
   pendingArpgAwards: 0,
+
+  lastMegaPoolSpinAt: 0,
 
   setDetectedTier: (tier, region) =>
     set({ currentAdTier: tier, detectedRegion: region }),
@@ -87,6 +91,50 @@ export const useEconomyStore = create((set, get) => ({
     });
   },
 
+  // Generic mini-game prize resolver.
+  // prize: { type: "silver" | "gold" | "diamond" | "cash" | "dud", amount }
+  awardPrize: (prize) => {
+    if (!prize || prize.type === "dud" || !prize.amount) return;
+    set((state) => {
+      switch (prize.type) {
+        case "silver":
+          return { silver: state.silver + prize.amount };
+        case "gold":
+          return { gold: state.gold + prize.amount };
+        case "diamond":
+          return { diamond: state.diamond + prize.amount };
+        case "cash":
+          return { walletCashBalance: state.walletCashBalance + prize.amount };
+        default:
+          return {};
+      }
+    });
+  },
+
+  canSpinMegaPool: () => {
+    const { lastMegaPoolSpinAt } = get();
+    return Date.now() - lastMegaPoolSpinAt >= MEGA_POOL_SPIN_COOLDOWN_MS;
+  },
+
+  // Reads the global Mega Pool balance and, if 24h cooldown has passed,
+  // rolls a prize among tiers the pool can currently afford. Returns
+  // { result: "COOLDOWN" | "TRY_AGAIN" | "WIN", amount? }
+  spinMegaPoolWheel: () => {
+    const { megaPoolAccumulated, canSpinMegaPool } = get();
+    if (!canSpinMegaPool()) {
+      return { result: "COOLDOWN" };
+    }
+    set({ lastMegaPoolSpinAt: Date.now() });
+
+    const affordablePrizes = MEGA_POOL_PRIZES.filter((p) => p <= megaPoolAccumulated);
+    if (affordablePrizes.length === 0) {
+      return { result: "TRY_AGAIN" };
+    }
+    const won = affordablePrizes[Math.floor(Math.random() * affordablePrizes.length)];
+    get().resolveMegaPoolWin(won);
+    return { result: "WIN", amount: won };
+  },
+
   dismissArpgCongrats: () => set({ showArpgCongrats: false }),
 
   confirmArpgAward: () =>
@@ -112,3 +160,5 @@ export const useEconomyStore = create((set, get) => ({
       return { diamond: state.diamond - 10, arpg: state.arpg + 1 };
     })
 }));
+
+// FILE LOCATION: src/store/economyStore.js (REPLACE existing file)
