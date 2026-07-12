@@ -1,11 +1,20 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { pickWeighted } from "../../utils/weightedRandom";
 
-const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+const CHEST_COUNT = 9;
 
-// prizePool: prize[] (length must equal number of chests, 9)
-const LuckyChests = ({ prizePool, onResult, disabled }) => {
-  const [assignments, setAssignments] = useState(() => shuffle(prizePool));
+// Each of the 9 chests is drawn independently from the weighted prize
+// table, so the odds stay correct regardless of which single chest the
+// player ends up opening (rather than relying on a hand-shuffled fixed pool).
+const drawAssignments = (prizeWeights) =>
+  Array.from({ length: CHEST_COUNT }, () =>
+    pickWeighted(prizeWeights.map((p) => ({ value: p.prize, weight: p.weight })))
+  );
+
+// prizeWeights: [{ prize, weight }]
+const LuckyChests = ({ prizeWeights, onResult, disabled }) => {
+  const [assignments, setAssignments] = useState(() => drawAssignments(prizeWeights));
   const [openedIndex, setOpenedIndex] = useState(null);
 
   const openChest = (index) => {
@@ -15,7 +24,7 @@ const LuckyChests = ({ prizePool, onResult, disabled }) => {
   };
 
   const resetChests = () => {
-    setAssignments(shuffle(prizePool));
+    setAssignments(drawAssignments(prizeWeights));
     setOpenedIndex(null);
   };
 
@@ -70,4 +79,4 @@ const styles = StyleSheet.create({
 
 export default LuckyChests;
 
-// FILE LOCATION: src/components/LuckyChests/LuckyChests.js (NEW file)
+// FILE LOCATION: src/components/LuckyChests/LuckyChests.js (REPLACE existing file)

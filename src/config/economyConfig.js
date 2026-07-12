@@ -44,32 +44,43 @@ export const MEGA_POOL_SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export const AUTO_SIMULATE_INTERVAL_MS = 2000;
 
+// Simulated ad break: every N completed mini-game rounds (across any game),
+// the player is shown a simulated ad and one simulateAdView() ad-revenue
+// tick is triggered. Swap this trigger for a real Ad Network SDK in Phase 10.
+export const GAMEPLAY_AD_INTERVAL = 4;
+
 // ---------------------------------------------------------------------------
 // Phase 3-8: Mini-game prize configuration
+// Every prize table below is WEIGHT-BASED: each entry carries a `weight`
+// (relative likelihood, not a percentage) so lower-value outcomes are common
+// and higher-value outcomes are rare. Prize shape: { type, amount }
+// type is one of "silver" | "gold" | "diamond" | "cash" | "dud"
 // ---------------------------------------------------------------------------
 
-// Generic prize shape: { type: "silver" | "gold" | "diamond" | "cash" | "dud", amount }
-
-export const SPIN_WHEEL_SEGMENTS = [
-  { id: "s1", label: "1 Silver", prize: { type: "silver", amount: 1 }, color: "#8C8C9A" },
-  { id: "s2", label: "3 Silver", prize: { type: "silver", amount: 3 }, color: "#A0A0AE" },
-  { id: "s3", label: "1 Gold", prize: { type: "gold", amount: 1 }, color: "#D4AF37" },
-  { id: "s4", label: "$0.001", prize: { type: "cash", amount: 0.001 }, color: "#4CAF50" },
-  { id: "s5", label: "1 Silver", prize: { type: "silver", amount: 1 }, color: "#8C8C9A" },
-  { id: "s6", label: "1 Diamond", prize: { type: "diamond", amount: 1 }, color: "#59C7F2" },
-  { id: "s7", label: "$0.01", prize: { type: "cash", amount: 0.01 }, color: "#2E9E4F" },
-  { id: "s8", label: "Try Again", prize: { type: "dud", amount: 0 }, color: "#3A3A55" }
+// Spin Wheel - exactly 8 segments, wedge size on screen is proportional to
+// `weight`, and the winning wedge is chosen with that same weight so the
+// wheel's visuals always match the real odds.
+export const SPIN_WHEEL_WEIGHTED_PRIZES = [
+  { label: "Try Again", weight: 30, color: "#3A3A55", prize: { type: "dud", amount: 0 } },
+  { label: "1 Silver", weight: 20, color: "#8C8C9A", prize: { type: "silver", amount: 1 } },
+  { label: "3 Silver", weight: 14, color: "#A0A0AE", prize: { type: "silver", amount: 3 } },
+  { label: "$0.001", weight: 13, color: "#4CAF50", prize: { type: "cash", amount: 0.001 } },
+  { label: "1 Gold", weight: 9, color: "#D4AF37", prize: { type: "gold", amount: 1 } },
+  { label: "1 Diamond", weight: 5, color: "#59C7F2", prize: { type: "diamond", amount: 1 } },
+  { label: "$0.01", weight: 5, color: "#2E9E4F", prize: { type: "cash", amount: 0.01 } },
+  { label: "5 Silver", weight: 4, color: "#8C8C9A", prize: { type: "silver", amount: 5 } }
 ];
 
-export const VIP_SPIN_WHEEL_SEGMENTS = [
-  { id: "v1", label: "5 Gold", prize: { type: "gold", amount: 5 }, color: "#D4AF37" },
-  { id: "v2", label: "1 Diamond", prize: { type: "diamond", amount: 1 }, color: "#59C7F2" },
-  { id: "v3", label: "$0.01", prize: { type: "cash", amount: 0.01 }, color: "#2E9E4F" },
-  { id: "v4", label: "3 Diamond", prize: { type: "diamond", amount: 3 }, color: "#59C7F2" },
-  { id: "v5", label: "10 Gold", prize: { type: "gold", amount: 10 }, color: "#D4AF37" },
-  { id: "v6", label: "$0.10", prize: { type: "cash", amount: 0.10 }, color: "#2E9E4F" },
-  { id: "v7", label: "2 Diamond", prize: { type: "diamond", amount: 2 }, color: "#59C7F2" },
-  { id: "v8", label: "$0.05", prize: { type: "cash", amount: 0.05 }, color: "#2E9E4F" }
+// VIP wheel - zero-dud, still weighted so jackpot-tier cash is rare.
+export const VIP_SPIN_WHEEL_WEIGHTED_PRIZES = [
+  { label: "3 Gold", weight: 28, color: "#D4AF37", prize: { type: "gold", amount: 3 } },
+  { label: "5 Gold", weight: 20, color: "#D4AF37", prize: { type: "gold", amount: 5 } },
+  { label: "1 Diamond", weight: 20, color: "#59C7F2", prize: { type: "diamond", amount: 1 } },
+  { label: "2 Diamond", weight: 14, color: "#59C7F2", prize: { type: "diamond", amount: 2 } },
+  { label: "$0.01", weight: 10, color: "#2E9E4F", prize: { type: "cash", amount: 0.01 } },
+  { label: "3 Diamond", weight: 5, color: "#59C7F2", prize: { type: "diamond", amount: 3 } },
+  { label: "$0.05", weight: 2, color: "#2E9E4F", prize: { type: "cash", amount: 0.05 } },
+  { label: "$0.10", weight: 1, color: "#2E9E4F", prize: { type: "cash", amount: 0.10 } }
 ];
 
 export const SCRATCH_ICONS = ["🟡", "💎", "🥈", "💰", "⭐", "🔷"];
@@ -84,8 +95,22 @@ export const SCRATCH_ICON_PRIZES = {
   "🔷": { type: "cash", amount: 0.001 }
 };
 
-export const SLOT_SYMBOLS = ["🍒", "🍋", "🔔", "⭐", "💎", "7️⃣"];
-export const VIP_SLOT_SYMBOLS = ["🔔", "⭐", "💎", "7️⃣"];
+// Slot Machine symbol odds - lower-value symbols come up far more often.
+export const SLOT_SYMBOL_WEIGHTS = [
+  { symbol: "🍋", weight: 34 },
+  { symbol: "🍒", weight: 26 },
+  { symbol: "🔔", weight: 18 },
+  { symbol: "⭐", weight: 12 },
+  { symbol: "💎", weight: 7 },
+  { symbol: "7️⃣", weight: 3 }
+];
+
+export const VIP_SLOT_SYMBOL_WEIGHTS = [
+  { symbol: "🔔", weight: 40 },
+  { symbol: "⭐", weight: 30 },
+  { symbol: "💎", weight: 20 },
+  { symbol: "7️⃣", weight: 10 }
+];
 
 export const SLOT_SYMBOL_PRIZES = {
   "🍒": { type: "silver", amount: 2 },
@@ -96,28 +121,28 @@ export const SLOT_SYMBOL_PRIZES = {
   "7️⃣": { type: "cash", amount: 0.10 }
 };
 
-export const CHEST_PRIZE_POOL = [
-  { type: "silver", amount: 2 },
-  { type: "silver", amount: 5 },
-  { type: "gold", amount: 1 },
-  { type: "diamond", amount: 1 },
-  { type: "cash", amount: 0.001 },
-  { type: "cash", amount: 0.01 },
-  { type: "dud", amount: 0 },
-  { type: "dud", amount: 0 },
-  { type: "dud", amount: 0 }
+// Lucky Chests - 9 chests, each drawn independently from this weighted table
+// (rather than a fixed shuffled pool), so the odds stay consistent no
+// matter which single chest the player opens.
+export const CHEST_PRIZE_WEIGHTS = [
+  { weight: 34, prize: { type: "dud", amount: 0 } },
+  { weight: 24, prize: { type: "silver", amount: 2 } },
+  { weight: 14, prize: { type: "silver", amount: 5 } },
+  { weight: 12, prize: { type: "cash", amount: 0.001 } },
+  { weight: 9, prize: { type: "gold", amount: 1 } },
+  { weight: 5, prize: { type: "cash", amount: 0.01 } },
+  { weight: 2, prize: { type: "diamond", amount: 1 } }
 ];
 
-export const VIP_CHEST_PRIZE_POOL = [
-  { type: "gold", amount: 2 },
-  { type: "diamond", amount: 1 },
-  { type: "diamond", amount: 2 },
-  { type: "cash", amount: 0.01 },
-  { type: "cash", amount: 0.10 },
-  { type: "gold", amount: 5 },
-  { type: "diamond", amount: 3 },
-  { type: "cash", amount: 0.05 },
-  { type: "gold", amount: 3 }
+export const VIP_CHEST_PRIZE_WEIGHTS = [
+  { weight: 30, prize: { type: "gold", amount: 2 } },
+  { weight: 22, prize: { type: "gold", amount: 3 } },
+  { weight: 20, prize: { type: "diamond", amount: 1 } },
+  { weight: 14, prize: { type: "diamond", amount: 2 } },
+  { weight: 8, prize: { type: "cash", amount: 0.01 } },
+  { weight: 4, prize: { type: "diamond", amount: 3 } },
+  { weight: 1.5, prize: { type: "cash", amount: 0.05 } },
+  { weight: 0.5, prize: { type: "gold", amount: 5 } }
 ];
 
 // FILE LOCATION: src/config/economyConfig.js (REPLACE existing file)

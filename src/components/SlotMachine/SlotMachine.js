@@ -1,9 +1,13 @@
 import React, { useState, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { pickWeighted } from "../../utils/weightedRandom";
 
-// symbols: string[]  prizeMap: { [symbol]: prize }
+const WIN_CHANCE = 0.22;
+
+// symbolWeights: [{ symbol, weight }]   prizeMap: { [symbol]: prize }
 // zeroDud: if true, every pull is forced into a 3-match (VIP variant).
-const SlotMachine = ({ symbols, prizeMap, onResult, zeroDud, disabled }) => {
+const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) => {
+  const symbols = symbolWeights.map((s) => s.symbol);
   const [reels, setReels] = useState([symbols[0], symbols[0], symbols[0]]);
   const [spinning, setSpinning] = useState(false);
   const timers = useRef([]);
@@ -13,17 +17,21 @@ const SlotMachine = ({ symbols, prizeMap, onResult, zeroDud, disabled }) => {
     timers.current = [];
   };
 
+  const randomSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
+  const weightedSymbol = () =>
+    pickWeighted(symbolWeights.map((s) => ({ value: s.symbol, weight: s.weight })));
+
   const pull = () => {
     if (spinning || disabled) return;
     setSpinning(true);
     clearTimers();
 
     let finalReels;
-    if (zeroDud || Math.random() < 0.35) {
-      const winningSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+    if (zeroDud || Math.random() < WIN_CHANCE) {
+      const winningSymbol = weightedSymbol();
       finalReels = [winningSymbol, winningSymbol, winningSymbol];
     } else {
-      finalReels = [0, 1, 2].map(() => symbols[Math.floor(Math.random() * symbols.length)]);
+      finalReels = [0, 1, 2].map(() => randomSymbol());
       if (finalReels[0] === finalReels[1] && finalReels[1] === finalReels[2]) {
         finalReels[2] = symbols[(symbols.indexOf(finalReels[2]) + 1) % symbols.length];
       }
@@ -38,7 +46,7 @@ const SlotMachine = ({ symbols, prizeMap, onResult, zeroDud, disabled }) => {
         elapsed += interval;
         setReels((prev) => {
           const next = [...prev];
-          next[reelIndex] = symbols[Math.floor(Math.random() * symbols.length)];
+          next[reelIndex] = randomSymbol();
           return next;
         });
 
@@ -108,4 +116,4 @@ const styles = StyleSheet.create({
 
 export default SlotMachine;
 
-// FILE LOCATION: src/components/SlotMachine/SlotMachine.js (NEW file)
+// FILE LOCATION: src/components/SlotMachine/SlotMachine.js (REPLACE existing file)

@@ -26,6 +26,10 @@ export default function RootLayout() {
           options={{ drawerLabel: "Wallet", title: "Wallet" }}
         />
         <Drawer.Screen
+          name="exchange"
+          options={{ drawerLabel: "Exchange (Convert Materials)", title: "Exchange" }}
+        />
+        <Drawer.Screen
           name="subscription"
           options={{ drawerLabel: "VIP Pass (Subscription)", title: "VIP Pass" }}
         />

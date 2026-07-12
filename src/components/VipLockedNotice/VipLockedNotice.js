@@ -32,4 +32,4 @@ const styles = StyleSheet.create({
 
 export default VipLockedNotice;
 
-// FILE LOCATION: src/components/VipLockedNotice/VipLockedNotice.js (NEW file)
+// FILE LOCATION: src/components/VipLockedNotice/VipLockedNotice.js (unchanged)

@@ -1,68 +1,103 @@
-import React, { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, Animated, Easing, TouchableOpacity, StyleSheet } from "react-native";
+import Svg, { Path, Text as SvgText } from "react-native-svg";
+import { pickWeightedIndex } from "../../utils/weightedRandom";
 
-const RADIUS = 105;
+const SIZE = 260;
+const CENTER = SIZE / 2;
+const RADIUS = SIZE / 2 - 6;
 
-// Renders a circular 8-segment wheel using positioned chips (no external
-// SVG dependency required). "Spinning" is simulated by cycling the
-// highlighted segment with an accelerating-then-decelerating interval that
-// lands exactly on a randomly pre-selected winning segment.
+const polarToCartesian = (cx, cy, r, angleDeg) => {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+};
+
+const describeWedge = (cx, cy, r, startAngle, endAngle) => {
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
+};
+
+// A real circular wheel drawn with SVG wedges. Each wedge's visual size is
+// proportional to its `weight`, and the winning wedge is selected using the
+// exact same weights - so what the player sees always matches the real odds.
+// segments: [{ label, color, weight, prize }]
 const SpinWheel = ({ segments, onResult, disabled }) => {
   const [spinning, setSpinning] = useState(false);
-  const [highlightIndex, setHighlightIndex] = useState(0);
-  const timeoutRef = useRef(null);
+  const rotation = useRef(new Animated.Value(0)).current;
+  const currentRotationRef = useRef(0);
+
+  const totalWeight = segments.reduce((sum, s) => sum + s.weight, 0);
+  let cumulative = 0;
+  const wedges = segments.map((seg) => {
+    const startAngle = cumulative;
+    const angleSize = (seg.weight / totalWeight) * 360;
+    cumulative += angleSize;
+    return { ...seg, startAngle, endAngle: cumulative, angleSize };
+  });
 
   const spin = () => {
     if (spinning || disabled) return;
     setSpinning(true);
 
-    const winnerIndex = Math.floor(Math.random() * segments.length);
-    const fullLoops = segments.length * 3;
-    const totalSteps = fullLoops + winnerIndex;
-    let steps = 0;
-    let delay = 55;
+    const winnerIndex = pickWeightedIndex(segments.map((s) => s.weight));
+    const winner = wedges[winnerIndex];
+    const midAngle = winner.startAngle + winner.angleSize / 2;
 
-    const tick = () => {
-      setHighlightIndex((prev) => (prev + 1) % segments.length);
-      steps += 1;
-      if (steps >= totalSteps) {
-        setSpinning(false);
-        const winner = segments[winnerIndex];
-        onResult(winner.prize, winner);
-        return;
-      }
-      const remaining = totalSteps - steps;
-      delay += remaining < 8 ? 28 : 4;
-      timeoutRef.current = setTimeout(tick, delay);
-    };
-    timeoutRef.current = setTimeout(tick, delay);
+    const extraSpins = 5;
+    const normalizedTarget = (360 - midAngle) % 360;
+    const target = currentRotationRef.current + extraSpins * 360 + normalizedTarget;
+
+    Animated.timing(rotation, {
+      toValue: target,
+      duration: 3600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true
+    }).start(() => {
+      currentRotationRef.current = target;
+      setSpinning(false);
+      onResult(winner.prize, winner);
+    });
   };
+
+  const spinDeg = rotation.interpolate({
+    inputRange: [0, 360],
+    outputRange: ["0deg", "360deg"]
+  });
 
   return (
     <View style={styles.wrapper}>
       <View style={styles.wheelArea}>
-        {segments.map((seg, i) => {
-          const angle = (i / segments.length) * 2 * Math.PI - Math.PI / 2;
-          const x = RADIUS * Math.cos(angle);
-          const y = RADIUS * Math.sin(angle);
-          const active = i === highlightIndex;
-          return (
-            <View
-              key={seg.id}
-              style={[
-                styles.segment,
-                {
-                  backgroundColor: seg.color,
-                  transform: [{ translateX: x }, { translateY: y }],
-                  opacity: active ? 1 : 0.55,
-                  borderWidth: active ? 3 : 0
-                }
-              ]}
-            >
-              <Text style={styles.segmentText} numberOfLines={2}>{seg.label}</Text>
-            </View>
-          );
-        })}
+        <View style={styles.pointer} />
+        <Animated.View style={{ transform: [{ rotate: spinDeg }] }}>
+          <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+            {wedges.map((seg, i) => {
+              const mid = seg.startAngle + seg.angleSize / 2;
+              const labelPos = polarToCartesian(CENTER, CENTER, RADIUS * 0.62, mid);
+              return (
+                <React.Fragment key={i}>
+                  <Path
+                    d={describeWedge(CENTER, CENTER, RADIUS, seg.startAngle, seg.endAngle)}
+                    fill={seg.color}
+                    stroke="#0F0F1E"
+                    strokeWidth={2}
+                  />
+                  <SvgText
+                    x={labelPos.x}
+                    y={labelPos.y}
+                    fill="#0F0F1E"
+                    fontSize="10"
+                    fontWeight="700"
+                    textAnchor="middle"
+                  >
+                    {seg.label}
+                  </SvgText>
+                </React.Fragment>
+              );
+            })}
+          </Svg>
+        </Animated.View>
         <View style={styles.hub}>
           <Text style={styles.hubText}>SPIN</Text>
         </View>
@@ -82,30 +117,34 @@ const SpinWheel = ({ segments, onResult, disabled }) => {
 
 const styles = StyleSheet.create({
   wrapper: { alignItems: "center", justifyContent: "center", paddingVertical: 20 },
-  wheelArea: { width: 260, height: 260, alignItems: "center", justifyContent: "center", marginBottom: 24 },
-  segment: {
+  wheelArea: { width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center", marginBottom: 24 },
+  pointer: {
     position: "absolute",
-    width: 78,
-    height: 62,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderColor: "#FFFFFF",
-    paddingHorizontal: 4
+    top: -4,
+    zIndex: 5,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 16,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderTopColor: "#FFD700"
   },
-  segmentText: { color: "#0F0F1E", fontWeight: "700", fontSize: 11, textAlign: "center" },
   hub: {
     position: "absolute",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    top: SIZE / 2 - 28,
+    left: SIZE / 2 - 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: "#0F0F1E",
     borderWidth: 2,
     borderColor: "#FFD700",
     alignItems: "center",
     justifyContent: "center"
   },
-  hubText: { color: "#FFD700", fontWeight: "800", fontSize: 12 },
+  hubText: { color: "#FFD700", fontWeight: "800", fontSize: 11 },
   spinButton: { backgroundColor: "#FFD700", paddingHorizontal: 36, paddingVertical: 14, borderRadius: 16 },
   spinButtonDisabled: { opacity: 0.5 },
   spinButtonText: { color: "#1A1A2E", fontWeight: "800", fontSize: 15 }
@@ -113,4 +152,5 @@ const styles = StyleSheet.create({
 
 export default SpinWheel;
 
-// FILE LOCATION: src/components/SpinWheel/SpinWheel.js (NEW file)
+// FILE LOCATION: src/components/SpinWheel/SpinWheel.js (REPLACE existing file)
+// REQUIRES: react-native-svg (see setup command in the reply)

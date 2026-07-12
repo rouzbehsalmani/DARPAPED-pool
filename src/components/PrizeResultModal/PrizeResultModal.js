@@ -54,4 +54,4 @@ const styles = StyleSheet.create({
 
 export default PrizeResultModal;
 
-// FILE LOCATION: src/components/PrizeResultModal/PrizeResultModal.js (NEW file)
+// FILE LOCATION: src/components/PrizeResultModal/PrizeResultModal.js (unchanged)

@@ -6,7 +6,8 @@ import {
   ARPG_TRIGGER_THRESHOLD,
   MEGA_POOL_WIN_SPLIT,
   MEGA_POOL_PRIZES,
-  MEGA_POOL_SPIN_COOLDOWN_MS
+  MEGA_POOL_SPIN_COOLDOWN_MS,
+  GAMEPLAY_AD_INTERVAL
 } from "../config/economyConfig";
 
 function applyArpgShare(state, amountUsd) {
@@ -46,6 +47,11 @@ export const useEconomyStore = create((set, get) => ({
   pendingArpgAwards: 0,
 
   lastMegaPoolSpinAt: 0,
+
+  // Simulated ad-break gate: increments every time a mini-game round
+  // finishes, and flips adBreakPending on every GAMEPLAY_AD_INTERVAL-th play.
+  gamePlayCount: 0,
+  adBreakPending: false,
 
   setDetectedTier: (tier, region) =>
     set({ currentAdTier: tier, detectedRegion: region }),
@@ -111,12 +117,26 @@ export const useEconomyStore = create((set, get) => ({
     });
   },
 
+  // Called by every mini-game once a round finishes. Drives the simulated
+  // ad-break cadence (see GAMEPLAY_AD_INTERVAL / AdBreakModal).
+  registerGamePlay: () =>
+    set((state) => {
+      const nextCount = state.gamePlayCount + 1;
+      const shouldShowAd = nextCount % GAMEPLAY_AD_INTERVAL === 0;
+      return {
+        gamePlayCount: nextCount,
+        adBreakPending: state.adBreakPending || shouldShowAd
+      };
+    }),
+
+  clearAdBreak: () => set({ adBreakPending: false }),
+
   canSpinMegaPool: () => {
     const { lastMegaPoolSpinAt } = get();
     return Date.now() - lastMegaPoolSpinAt >= MEGA_POOL_SPIN_COOLDOWN_MS;
   },
 
-  // Reads the global Mega Pool balance and, if 24h cooldown has passed,
+  // Reads the global Mega Pool balance and, if the 24h cooldown has passed,
   // rolls a prize among tiers the pool can currently afford. Returns
   // { result: "COOLDOWN" | "TRY_AGAIN" | "WIN", amount? }
   spinMegaPoolWheel: () => {
@@ -144,6 +164,8 @@ export const useEconomyStore = create((set, get) => ({
       showArpgCongrats: false
     })),
 
+  // Material conversion is intentionally MANUAL - the player triggers it
+  // from the Exchange screen (app/exchange.js), it never happens automatically.
   convertSilverToGold: () =>
     set((state) => {
       if (state.silver < 10) return state;
