@@ -6,13 +6,16 @@ import AdBreakModal from "../AdBreakModal/AdBreakModal";
 import VipLockedNotice from "../VipLockedNotice/VipLockedNotice";
 import { useEconomyStore } from "../../store/economyStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { showRewardedAd } from "../../services/adNetworkService";
 
 // Shared shell used by every mini-game route. Centralizes:
 // - TopBar + title
 // - VIP gating (requireVip)
 // - Prize award + result modal
-// - Simulated ad-break cadence (registerGamePlay / AdBreakModal)
-// so each individual game screen only has to render its own game component.
+// - Simulated ad-break cadence: on trigger, calls the Phase 10 ad network
+//   abstraction (showRewardedAd) and feeds its reported revenue into the
+//   economy split (processAdResult) - swapping in a real ad SDK later only
+//   means changing adNetworkService.js, not this file.
 //
 // Usage:
 //   <GameScreenShell title="Spin the Wheel">
@@ -25,7 +28,7 @@ const GameScreenShell = ({ title, subtitle, accentColor = "#FFFFFF", requireVip 
   const registerGamePlay = useEconomyStore((s) => s.registerGamePlay);
   const adBreakPending = useEconomyStore((s) => s.adBreakPending);
   const clearAdBreak = useEconomyStore((s) => s.clearAdBreak);
-  const simulateAdView = useEconomyStore((s) => s.simulateAdView);
+  const processAdResult = useEconomyStore((s) => s.processAdResult);
 
   const [resultPrize, setResultPrize] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -35,6 +38,15 @@ const GameScreenShell = ({ title, subtitle, accentColor = "#FFFFFF", requireVip 
     setResultPrize(prize);
     setModalVisible(true);
     registerGamePlay();
+  };
+
+  const handleAdBreakComplete = () => {
+    showRewardedAd().then((result) => {
+      if (result.success) {
+        processAdResult(result.revenue);
+      }
+      clearAdBreak();
+    });
   };
 
   if (requireVip && !isVip) {
@@ -56,13 +68,7 @@ const GameScreenShell = ({ title, subtitle, accentColor = "#FFFFFF", requireVip 
         onClose={() => setModalVisible(false)}
       />
 
-      <AdBreakModal
-        visible={adBreakPending}
-        onComplete={() => {
-          simulateAdView();
-          clearAdBreak();
-        }}
-      />
+      <AdBreakModal visible={adBreakPending} onComplete={handleAdBreakComplete} />
     </SafeAreaView>
   );
 };
@@ -76,4 +82,4 @@ const styles = StyleSheet.create({
 
 export default GameScreenShell;
 
-// FILE LOCATION: src/components/GameScreenShell/GameScreenShell.js (NEW file)
+// FILE LOCATION: src/components/GameScreenShell/GameScreenShell.js (REPLACE existing file)

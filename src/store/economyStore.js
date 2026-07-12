@@ -48,35 +48,45 @@ export const useEconomyStore = create((set, get) => ({
 
   lastMegaPoolSpinAt: 0,
 
-  // Simulated ad-break gate: increments every time a mini-game round
-  // finishes, and flips adBreakPending on every GAMEPLAY_AD_INTERVAL-th play.
   gamePlayCount: 0,
   adBreakPending: false,
+
+  withdrawalRequests: [],
 
   setDetectedTier: (tier, region) =>
     set({ currentAdTier: tier, detectedRegion: region }),
   setAutoSimulating: (value) => set({ isAutoSimulating: value }),
 
-  simulateAdView: () => {
-    const { currentAdTier } = get();
-    const revenue = AD_REVENUE_BY_TIER[currentAdTier];
-
-    const cashCut = revenue * REVENUE_SPLIT.CASH_SHARE;
-    const arpgCut = revenue * REVENUE_SPLIT.ARPG_SHARE;
-    const platformCut = revenue * REVENUE_SPLIT.PLATFORM_SHARE;
-    const megaPoolCut = revenue * REVENUE_SPLIT.MEGA_POOL_SHARE;
+  // Core 30/30/10/30 revenue split, driven by a single ad-view's reported
+  // revenue. This is the ONLY place that logic lives - both the manual
+  // debug button (simulateAdView) and the real ad network integration
+  // (Phase 10 - src/services/adNetworkService.js, wired via GameScreenShell)
+  // funnel through here.
+  processAdResult: (revenueUsd) => {
+    const cashCut = revenueUsd * REVENUE_SPLIT.CASH_SHARE;
+    const arpgCut = revenueUsd * REVENUE_SPLIT.ARPG_SHARE;
+    const platformCut = revenueUsd * REVENUE_SPLIT.PLATFORM_SHARE;
+    const megaPoolCut = revenueUsd * REVENUE_SPLIT.MEGA_POOL_SHARE;
 
     set((state) => {
       const arpgPatch = applyArpgShare(state, arpgCut);
       return {
         totalAdsWatched: state.totalAdsWatched + 1,
-        totalAdRevenueGenerated: state.totalAdRevenueGenerated + revenue,
+        totalAdRevenueGenerated: state.totalAdRevenueGenerated + revenueUsd,
         walletCashBalance: state.walletCashBalance + cashCut,
         platformRevenueTotal: state.platformRevenueTotal + platformCut,
         megaPoolAccumulated: state.megaPoolAccumulated + megaPoolCut,
         ...arpgPatch
       };
     });
+  },
+
+  // Manual debug button (Phase1TestScreen) - uses the locally detected tier
+  // for a quick, no-network test of the split logic above.
+  simulateAdView: () => {
+    const { currentAdTier, processAdResult } = get();
+    const revenue = AD_REVENUE_BY_TIER[currentAdTier];
+    processAdResult(revenue);
   },
 
   resolveMegaPoolWin: (wonAmountUsd) => {
@@ -136,9 +146,6 @@ export const useEconomyStore = create((set, get) => ({
     return Date.now() - lastMegaPoolSpinAt >= MEGA_POOL_SPIN_COOLDOWN_MS;
   },
 
-  // Reads the global Mega Pool balance and, if the 24h cooldown has passed,
-  // rolls a prize among tiers the pool can currently afford. Returns
-  // { result: "COOLDOWN" | "TRY_AGAIN" | "WIN", amount? }
   spinMegaPoolWheel: () => {
     const { megaPoolAccumulated, canSpinMegaPool } = get();
     if (!canSpinMegaPool()) {
@@ -164,8 +171,6 @@ export const useEconomyStore = create((set, get) => ({
       showArpgCongrats: false
     })),
 
-  // Material conversion is intentionally MANUAL - the player triggers it
-  // from the Exchange screen (app/exchange.js), it never happens automatically.
   convertSilverToGold: () =>
     set((state) => {
       if (state.silver < 10) return state;
@@ -180,7 +185,35 @@ export const useEconomyStore = create((set, get) => ({
     set((state) => {
       if (state.diamond < 10) return state;
       return { diamond: state.diamond - 10, arpg: state.arpg + 1 };
-    })
+    }),
+
+  // Phase 9 - Wallet. Backed by src/services/paymentService.js (currently
+  // simulated). Withdrawal deducts the balance immediately as "pending";
+  // a real backend would only deduct once the payout is confirmed.
+  requestWithdrawal: (amountUsd, methodId, destination) => {
+    const { walletCashBalance } = get();
+    if (!amountUsd || amountUsd <= 0 || amountUsd > walletCashBalance) {
+      return { success: false, error: "Invalid amount" };
+    }
+    set((state) => ({
+      walletCashBalance: state.walletCashBalance - amountUsd,
+      withdrawalRequests: [
+        {
+          id: `wd_${Date.now()}`,
+          amountUsd,
+          methodId,
+          destination,
+          status: "pending",
+          createdAt: Date.now()
+        },
+        ...state.withdrawalRequests
+      ]
+    }));
+    return { success: true };
+  },
+
+  topUpBalance: (amountUsd) =>
+    set((state) => ({ walletCashBalance: state.walletCashBalance + amountUsd }))
 }));
 
 // FILE LOCATION: src/store/economyStore.js (REPLACE existing file)
