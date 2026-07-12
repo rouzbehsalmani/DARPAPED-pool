@@ -1,8 +1,15 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Drawer } from "expo-router/drawer";
+import { initAdNetwork } from "../src/services/adNetworkService";
 
 export default function RootLayout() {
+  useEffect(() => {
+    // Phase 10 - shuffles the ad-provider rotation order once per app
+    // session (see src/services/adNetworkService.js / adProviders/index.js).
+    initAdNetwork();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Drawer
