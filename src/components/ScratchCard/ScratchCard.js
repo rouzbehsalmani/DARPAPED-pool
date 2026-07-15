@@ -102,8 +102,17 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
 
   const panResponder = useRef(
     PanResponder.create({
+      // Claim the responder immediately and don't let a child (the foil
+      // tile <Image>s) steal it - this is what was letting the browser's
+      // native "drag this image" gesture hijack the touch instead of our
+      // scratch logic. onStartShouldSetPanResponderCapture (capture phase,
+      // fires before children) plus pointerEvents="none" on the tiles
+      // below is the actual fix.
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (evt) => scratchAt(evt.nativeEvent.locationX, evt.nativeEvent.locationY),
       onPanResponderMove: (evt) => scratchAt(evt.nativeEvent.locationX, evt.nativeEvent.locationY)
     })
@@ -127,6 +136,7 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
           return (
             <View
               key={i}
+              pointerEvents="none"
               style={[
                 styles.zone,
                 { left: col * ZONE_WIDTH, top: row * ZONE_HEIGHT, width: ZONE_WIDTH, height: ZONE_HEIGHT }
@@ -136,38 +146,45 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
             </View>
           );
         })}
-        <View style={[styles.dividerV, { left: ZONE_WIDTH }]} />
-        <View style={[styles.dividerV, { left: ZONE_WIDTH * 2 }]} />
-        <View style={[styles.dividerH, { top: ZONE_HEIGHT }]} />
+        <View pointerEvents="none" style={[styles.dividerV, { left: ZONE_WIDTH }]} />
+        <View pointerEvents="none" style={[styles.dividerV, { left: ZONE_WIDTH * 2 }]} />
+        <View pointerEvents="none" style={[styles.dividerH, { top: ZONE_HEIGHT }]} />
 
-        {/* Foil mask: small tiles cropping the SAME cover image, removed one by one as scratched */}
-        {Array.from({ length: MASK_ROWS }).map((_, row) =>
-          Array.from({ length: MASK_COLS }).map((_, col) => {
-            const idx = row * MASK_COLS + col;
-            if (!maskRef.current[idx]) return null;
-            return (
-              <View
-                key={idx}
-                style={[
-                  styles.maskTile,
-                  { left: col * TILE_WIDTH, top: row * TILE_HEIGHT, width: TILE_WIDTH, height: TILE_HEIGHT }
-                ]}
-              >
-                <Image
-                  source={coverImage}
-                  resizeMode="cover"
-                  style={{
-                    position: "absolute",
-                    width: CARD_WIDTH,
-                    height: CARD_HEIGHT,
-                    left: -col * TILE_WIDTH,
-                    top: -row * TILE_HEIGHT
-                  }}
-                />
-              </View>
-            );
-          })
-        )}
+        {/* Foil mask: small tiles cropping the SAME cover image, removed one
+            by one as scratched. pointerEvents="none" is critical here - it
+            stops these <Image> tiles from ever receiving the touch/mouse
+            event themselves (which is what was triggering the browser's
+            native image-drag instead of our scratch gesture). */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {Array.from({ length: MASK_ROWS }).map((_, row) =>
+            Array.from({ length: MASK_COLS }).map((_, col) => {
+              const idx = row * MASK_COLS + col;
+              if (!maskRef.current[idx]) return null;
+              return (
+                <View
+                  key={idx}
+                  style={[
+                    styles.maskTile,
+                    { left: col * TILE_WIDTH, top: row * TILE_HEIGHT, width: TILE_WIDTH, height: TILE_HEIGHT }
+                  ]}
+                >
+                  <Image
+                    source={coverImage}
+                    resizeMode="cover"
+                    draggable={false}
+                    style={{
+                      position: "absolute",
+                      width: CARD_WIDTH,
+                      height: CARD_HEIGHT,
+                      left: -col * TILE_WIDTH,
+                      top: -row * TILE_HEIGHT
+                    }}
+                  />
+                </View>
+              );
+            })
+          )}
+        </View>
       </View>
       <Text style={styles.hint}>Drag across the card to scratch it off</Text>
       {finishedRef.current && (

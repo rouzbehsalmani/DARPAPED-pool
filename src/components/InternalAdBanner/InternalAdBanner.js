@@ -2,11 +2,12 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { COLORS, RADIUS, FONTS } from "../../theme/theme";
 
-// Self-promotion slot - NOT a third-party ad network placement. Cycles
+// Self-promotion strip - NOT a third-party ad network placement. Cycles
 // through whatever's listed in PROMO_SLOTS so you can cross-promote your
 // other apps/products here. Edit this array to point at your own startups.
+// Rendered as a wide horizontal banner under the game area.
 const PROMO_SLOTS = [
-  { emoji: "🚀", title: "More from us", subtitle: "Check our other apps" }
+  { emoji: "🚀", title: "More from us", subtitle: "Check out our other apps" }
 ];
 
 const ROTATE_MS = 5000;
@@ -27,8 +28,10 @@ const InternalAdBanner = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.emoji}>{slot.emoji}</Text>
-      <Text style={styles.title}>{slot.title}</Text>
-      <Text style={styles.subtitle}>{slot.subtitle}</Text>
+      <View style={styles.textCol}>
+        <Text style={styles.title}>{slot.title}</Text>
+        <Text style={styles.subtitle}>{slot.subtitle}</Text>
+      </View>
     </View>
   );
 };
@@ -37,20 +40,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 4
+    paddingHorizontal: 14
   },
-  emoji: { fontSize: 16, marginBottom: 4 },
-  title: { color: COLORS.textSecondary, fontFamily: FONTS.semiBold, fontSize: 9, textAlign: "center" },
-  subtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 8, textAlign: "center", marginTop: 2 }
+  emoji: { fontSize: 20, marginRight: 10 },
+  textCol: { flex: 1 },
+  title: { color: COLORS.textSecondary, fontFamily: FONTS.semiBold, fontSize: 12 },
+  subtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 11, marginTop: 2 }
 });
 
 export default InternalAdBanner;
 
-// FILE LOCATION: src/components/InternalAdBanner/InternalAdBanner.js (NEW file)
+// FILE LOCATION: src/components/InternalAdBanner/InternalAdBanner.js (REPLACE existing file)

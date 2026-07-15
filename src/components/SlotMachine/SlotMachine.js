@@ -10,21 +10,22 @@ const RESULT_SUSPENSE_MS = 350; // brief pause after the last reel stops, before
 // symbolWeights: [{ symbol, weight }]   prizeMap: { [symbol]: prize }
 // zeroDud: if true, every pull is forced into a 3-match (VIP variant).
 //
-// Each reel shows a 3-symbol vertical window (top/middle/bottom), like a
-// real slot machine reel - only the highlighted MIDDLE row is the actual
-// payline that counts toward a win; top/bottom are cosmetic neighbors.
+// Each reel is a real scrolling strip, not 3 independently-randomized
+// slots: every tick shifts the whole strip down by one - the bottom symbol
+// exits, the middle symbol becomes the new bottom, the top symbol becomes
+// the new middle, and one fresh symbol enters at the top. That's what
+// gives it the "fixed symbols flowing past a window" feel of a real
+// mechanical reel instead of random flicker.
 const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) => {
   const symbols = symbolWeights.map((s) => s.symbol);
   const randomSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
   const weightedSymbol = () =>
     pickWeighted(symbolWeights.map((s) => ({ value: s.symbol, weight: s.weight })));
 
-  const buildStrip = (middle) => [randomSymbol(), middle, randomSymbol()];
-
   const [reels, setReels] = useState([
-    buildStrip(symbols[0]),
-    buildStrip(symbols[0]),
-    buildStrip(symbols[0])
+    [symbols[0], symbols[0], symbols[0]],
+    [symbols[0], symbols[0], symbols[0]],
+    [symbols[0], symbols[0], symbols[0]]
   ]);
   const [spinning, setSpinning] = useState(false);
   const timers = useRef([]);
@@ -33,6 +34,10 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
     timers.current.forEach((t) => clearTimeout(t));
     timers.current = [];
   };
+
+  // Shifts one reel's strip down by one slot: new symbol enters at top,
+  // everything else moves down one, old bottom symbol exits.
+  const shiftDown = (strip, newTop) => [newTop, strip[0], strip[1]];
 
   const pull = () => {
     if (spinning || disabled) return;
@@ -52,21 +57,19 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
 
     [0, 1, 2].forEach((reelIndex) => {
       const spinDuration = 900 + reelIndex * 600;
-      const interval = 80;
+      const interval = 90;
       let elapsed = 0;
 
       const cycle = () => {
         elapsed += interval;
-        setReels((prev) => {
-          const next = [...prev];
-          next[reelIndex] = buildStrip(randomSymbol());
-          return next;
-        });
 
         if (elapsed >= spinDuration) {
+          // Final shift places the real result into the middle slot, still
+          // continuing the same downward-flowing motion (no jarring jump).
           setReels((prev) => {
             const next = [...prev];
-            next[reelIndex] = buildStrip(finalMiddles[reelIndex]);
+            next[reelIndex] = shiftDown(prev[reelIndex], randomSymbol());
+            next[reelIndex][1] = finalMiddles[reelIndex];
             return next;
           });
           if (reelIndex === 2) {
@@ -84,6 +87,12 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
           }
           return;
         }
+
+        setReels((prev) => {
+          const next = [...prev];
+          next[reelIndex] = shiftDown(prev[reelIndex], randomSymbol());
+          return next;
+        });
         timers.current.push(setTimeout(cycle, interval));
       };
       timers.current.push(setTimeout(cycle, interval));

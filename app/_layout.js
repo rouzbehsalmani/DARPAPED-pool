@@ -12,6 +12,23 @@ import {
 import { initAdNetwork } from "../src/services/adNetworkService";
 import { COLORS } from "../src/theme/theme";
 
+// Every route file under app/ becomes a navigable screen automatically
+// (expo-router file-based routing) - that part is fine and desired. But
+// the Drawer would ALSO list every one of them in the visible menu unless
+// told not to. These mini-game routes are only ever reached via
+// router.push() from Main Game Selection / VIP Games, so they're hidden
+// from the drawer's own list with drawerItemStyle height:0 below.
+const HIDDEN_ROUTE_NAMES = [
+  "spin-wheel",
+  "scratch-card",
+  "slot-machine",
+  "lucky-chests",
+  "vip-spin-wheel",
+  "vip-scratch-card",
+  "vip-slot-machine",
+  "vip-lucky-chests"
+];
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
@@ -41,9 +58,9 @@ export default function RootLayout() {
           <Drawer
             screenOptions={{
               // Force the classic slide-in/overlay drawer (hamburger icon
-              // toggles it) on EVERY screen size. Without this,
-              // react-navigation auto-switches to a permanently-visible
-              // sidebar on wide viewports, which is not what we want here.
+              // toggles it) on EVERY screen size, instead of react-
+              // navigation's default of pinning it open as a permanent
+              // sidebar on wide viewports.
               drawerType: "front",
               headerStyle: { backgroundColor: COLORS.bgCard },
               headerTintColor: COLORS.gold,
@@ -88,6 +105,18 @@ export default function RootLayout() {
               name="settings"
               options={{ drawerLabel: "⚙️  Settings", title: "Settings" }}
             />
+            {HIDDEN_ROUTE_NAMES.map((name) => (
+              <Drawer.Screen
+                key={name}
+                name={name}
+                options={{
+                  title: name,
+                  drawerItemStyle: { height: 0, marginVertical: 0, padding: 0 },
+                  drawerLabel: () => null,
+                  drawerIcon: () => null
+                }}
+              />
+            ))}
           </Drawer>
         </View>
       </View>

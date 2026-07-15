@@ -28,10 +28,12 @@ const formatCountdown = (ms) => {
 // - Simulated ad-break cadence (registerGamePlay / AdBreakModal)
 // - Energy/stamina cooldown gate
 //
-// Layout is a ROW: [game column (flex:1, centered)] [energy column (fixed
-// width: gauge + internal self-promo banner)] - this way the game content
-// re-centers itself within the remaining space instead of the energy bar
-// floating on top and throwing off the visual balance.
+// Layout is a ROW: [game column] [energy column].
+// - energyColumn: the FULL height of the body, dedicated only to the
+//   energy gauge (matches how tall it used to be before it got squeezed).
+// - gameColumn: split vertically 75/25 - the game itself on top, and an
+//   internal self-promo banner filling the leftover space at the bottom
+//   (instead of leaving it empty).
 //
 // Usage:
 //   <GameScreenShell title="Spin the Wheel" infoText="...">
@@ -97,29 +99,33 @@ const GameScreenShell = ({
       <TopBar arpgCounterRef={arpgCounterRef} />
       <LinearGradient colors={GRADIENTS.background} style={styles.bodyRow}>
         <View style={styles.gameColumn}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
-            <InfoButton title={infoTitle} text={infoText} />
-          </View>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-
-          {canPlay ? (
-            children(handleResult)
-          ) : (
-            <View style={styles.rechargeCard}>
-              <Text style={styles.rechargeTitle}>Recharging...</Text>
-              <Text style={styles.rechargeSubtitle}>
-                Come back in {formatCountdown(msUntilNextPlay())} for your next play
-              </Text>
-              {isVip && <Text style={styles.rechargeVipNote}>VIP: 2x faster recharge</Text>}
+          <View style={styles.gameArea}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
+              <InfoButton title={infoTitle} text={infoText} />
             </View>
-          )}
+            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+
+            {canPlay ? (
+              children(handleResult)
+            ) : (
+              <View style={styles.rechargeCard}>
+                <Text style={styles.rechargeTitle}>Recharging...</Text>
+                <Text style={styles.rechargeSubtitle}>
+                  Come back in {formatCountdown(msUntilNextPlay())} for your next play
+                </Text>
+                {isVip && <Text style={styles.rechargeVipNote}>VIP: 2x faster recharge</Text>}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.adArea}>
+            <InternalAdBanner />
+          </View>
         </View>
 
         <View style={styles.energyColumn}>
           <EnergyBar />
-          <View style={styles.energyGap} />
-          <InternalAdBanner />
         </View>
       </LinearGradient>
 
@@ -137,9 +143,10 @@ const GameScreenShell = ({
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bgDark },
   bodyRow: { flex: 1, flexDirection: "row", padding: SPACING.lg },
-  gameColumn: { flex: 1, alignItems: "center" },
-  energyColumn: { width: 56, paddingLeft: SPACING.sm },
-  energyGap: { height: SPACING.sm },
+  gameColumn: { flex: 1 },
+  gameArea: { flex: 3, alignItems: "center" },
+  adArea: { flex: 1, paddingTop: SPACING.sm },
+  energyColumn: { width: 50, paddingLeft: SPACING.sm },
   titleRow: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8, marginBottom: 4 },
   title: { fontFamily: FONTS.bold, fontSize: 19 },
   subtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 12, marginBottom: 8, alignSelf: "flex-start" },
