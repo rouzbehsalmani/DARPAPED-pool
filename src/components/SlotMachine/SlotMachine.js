@@ -1,15 +1,31 @@
 import React, { useState, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { pickWeighted } from "../../utils/weightedRandom";
+import { FONTS } from "../../theme/theme";
 
 const WIN_CHANCE = 0.22;
 const RESULT_SUSPENSE_MS = 350; // brief pause after the last reel stops, before the result fires
 
 // symbolWeights: [{ symbol, weight }]   prizeMap: { [symbol]: prize }
 // zeroDud: if true, every pull is forced into a 3-match (VIP variant).
+//
+// Each reel shows a 3-symbol vertical window (top/middle/bottom), like a
+// real slot machine reel - only the highlighted MIDDLE row is the actual
+// payline that counts toward a win; top/bottom are cosmetic neighbors.
 const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) => {
   const symbols = symbolWeights.map((s) => s.symbol);
-  const [reels, setReels] = useState([symbols[0], symbols[0], symbols[0]]);
+  const randomSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
+  const weightedSymbol = () =>
+    pickWeighted(symbolWeights.map((s) => ({ value: s.symbol, weight: s.weight })));
+
+  const buildStrip = (middle) => [randomSymbol(), middle, randomSymbol()];
+
+  const [reels, setReels] = useState([
+    buildStrip(symbols[0]),
+    buildStrip(symbols[0]),
+    buildStrip(symbols[0])
+  ]);
   const [spinning, setSpinning] = useState(false);
   const timers = useRef([]);
 
@@ -18,28 +34,22 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
     timers.current = [];
   };
 
-  const randomSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
-  const weightedSymbol = () =>
-    pickWeighted(symbolWeights.map((s) => ({ value: s.symbol, weight: s.weight })));
-
   const pull = () => {
     if (spinning || disabled) return;
     setSpinning(true);
     clearTimers();
 
-    let finalReels;
+    let finalMiddles;
     if (zeroDud || Math.random() < WIN_CHANCE) {
       const winningSymbol = weightedSymbol();
-      finalReels = [winningSymbol, winningSymbol, winningSymbol];
+      finalMiddles = [winningSymbol, winningSymbol, winningSymbol];
     } else {
-      finalReels = [0, 1, 2].map(() => randomSymbol());
-      if (finalReels[0] === finalReels[1] && finalReels[1] === finalReels[2]) {
-        finalReels[2] = symbols[(symbols.indexOf(finalReels[2]) + 1) % symbols.length];
+      finalMiddles = [0, 1, 2].map(() => randomSymbol());
+      if (finalMiddles[0] === finalMiddles[1] && finalMiddles[1] === finalMiddles[2]) {
+        finalMiddles[2] = symbols[(symbols.indexOf(finalMiddles[2]) + 1) % symbols.length];
       }
     }
 
-    // Slower, staggered reel stops (900ms / 1500ms / 2100ms) so a pull
-    // takes a couple of seconds instead of finishing almost instantly.
     [0, 1, 2].forEach((reelIndex) => {
       const spinDuration = 900 + reelIndex * 600;
       const interval = 80;
@@ -49,23 +59,23 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
         elapsed += interval;
         setReels((prev) => {
           const next = [...prev];
-          next[reelIndex] = randomSymbol();
+          next[reelIndex] = buildStrip(randomSymbol());
           return next;
         });
 
         if (elapsed >= spinDuration) {
           setReels((prev) => {
             const next = [...prev];
-            next[reelIndex] = finalReels[reelIndex];
+            next[reelIndex] = buildStrip(finalMiddles[reelIndex]);
             return next;
           });
           if (reelIndex === 2) {
             timers.current.push(
               setTimeout(() => {
                 setSpinning(false);
-                const isWin = finalReels[0] === finalReels[1] && finalReels[1] === finalReels[2];
+                const isWin = finalMiddles[0] === finalMiddles[1] && finalMiddles[1] === finalMiddles[2];
                 if (isWin) {
-                  onResult(prizeMap[finalReels[0]], { symbol: finalReels[0] });
+                  onResult(prizeMap[finalMiddles[0]], { symbol: finalMiddles[0] });
                 } else {
                   onResult({ type: "dud", amount: 0 }, null);
                 }
@@ -83,19 +93,25 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
   return (
     <View style={styles.wrapper}>
       <View style={styles.reelsRow}>
-        {reels.map((symbol, i) => (
+        {reels.map((strip, i) => (
           <View key={i} style={styles.reel}>
-            <Text style={styles.reelText}>{symbol}</Text>
+            <Text style={styles.symbolGhost}>{strip[0]}</Text>
+            <View style={styles.paylineRow}>
+              <Text style={styles.symbolMain}>{strip[1]}</Text>
+            </View>
+            <Text style={styles.symbolGhost}>{strip[2]}</Text>
           </View>
         ))}
       </View>
       <TouchableOpacity
-        style={[styles.lever, (spinning || disabled) && styles.leverDisabled]}
         onPress={pull}
         disabled={spinning || disabled}
         activeOpacity={0.85}
+        style={(spinning || disabled) && styles.leverDisabled}
       >
-        <Text style={styles.leverText}>{spinning ? "Spinning..." : "Pull Lever"}</Text>
+        <LinearGradient colors={["#F16B6B", "#C23E3E"]} style={styles.lever}>
+          <Text style={styles.leverText}>{spinning ? "Spinning..." : "Pull Lever"}</Text>
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
@@ -106,19 +122,31 @@ const styles = StyleSheet.create({
   reelsRow: { flexDirection: "row", marginBottom: 24 },
   reel: {
     width: 78,
-    height: 90,
+    height: 270,
     backgroundColor: "#26264A",
     borderRadius: 14,
     marginHorizontal: 6,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#FFD700"
+    borderColor: "#FFD700",
+    paddingVertical: 14,
+    overflow: "hidden"
   },
-  reelText: { fontSize: 34 },
-  lever: { backgroundColor: "#E05555", paddingHorizontal: 36, paddingVertical: 14, borderRadius: 16 },
+  symbolGhost: { fontSize: 30, opacity: 0.35 },
+  paylineRow: {
+    width: "100%",
+    paddingVertical: 8,
+    alignItems: "center",
+    backgroundColor: "rgba(255,215,0,0.10)",
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "rgba(255,215,0,0.35)"
+  },
+  symbolMain: { fontSize: 40 },
+  lever: { paddingHorizontal: 36, paddingVertical: 14, borderRadius: 16 },
   leverDisabled: { opacity: 0.5 },
-  leverText: { color: "#FFFFFF", fontWeight: "800", fontSize: 15 }
+  leverText: { color: "#FFFFFF", fontFamily: FONTS.bold, fontSize: 15 }
 });
 
 export default SlotMachine;

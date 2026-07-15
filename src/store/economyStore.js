@@ -5,7 +5,6 @@ import {
   REVENUE_SPLIT,
   ARPG_TRIGGER_THRESHOLD,
   MEGA_POOL_WIN_SPLIT,
-  MEGA_POOL_PRIZES,
   MEGA_POOL_SPIN_COOLDOWN_MS,
   GAMEPLAY_AD_INTERVAL
 } from "../config/economyConfig";
@@ -58,9 +57,8 @@ export const useEconomyStore = create((set, get) => ({
   setAutoSimulating: (value) => set({ isAutoSimulating: value }),
 
   // Core 30/30/10/30 revenue split, driven by a single ad-view's reported
-  // revenue. This is the ONLY place that logic lives - both the manual
-  // debug button (simulateAdView) and the real ad network integration
-  // (Phase 10 - src/services/adNetworkService.js, wired via GameScreenShell)
+  // revenue. Both the manual debug button (simulateAdView) and the real ad
+  // network integration (adNetworkService.js, wired via GameScreenShell)
   // funnel through here.
   processAdResult: (revenueUsd) => {
     const cashCut = revenueUsd * REVENUE_SPLIT.CASH_SHARE;
@@ -89,6 +87,7 @@ export const useEconomyStore = create((set, get) => ({
     processAdResult(revenue);
   },
 
+  // Splits a Mega Pool win 10% team / 50% user cash / 40% user ARPG share.
   resolveMegaPoolWin: (wonAmountUsd) => {
     set((state) => {
       const amount = Math.min(wonAmountUsd, state.megaPoolAccumulated);
@@ -105,6 +104,19 @@ export const useEconomyStore = create((set, get) => ({
         ...arpgPatch
       };
     });
+  },
+
+  // Called by app/mega-pool.js once its own SpinWheel lands on a prize
+  // (the wheel component itself picks the winner from the weighted table -
+  // this just marks the cooldown and applies the win split).
+  claimMegaPoolPrize: (amountUsd) => {
+    set({ lastMegaPoolSpinAt: Date.now() });
+    get().resolveMegaPoolWin(amountUsd);
+  },
+
+  canSpinMegaPool: () => {
+    const { lastMegaPoolSpinAt } = get();
+    return Date.now() - lastMegaPoolSpinAt >= MEGA_POOL_SPIN_COOLDOWN_MS;
   },
 
   // Generic mini-game prize resolver.
@@ -140,27 +152,6 @@ export const useEconomyStore = create((set, get) => ({
     }),
 
   clearAdBreak: () => set({ adBreakPending: false }),
-
-  canSpinMegaPool: () => {
-    const { lastMegaPoolSpinAt } = get();
-    return Date.now() - lastMegaPoolSpinAt >= MEGA_POOL_SPIN_COOLDOWN_MS;
-  },
-
-  spinMegaPoolWheel: () => {
-    const { megaPoolAccumulated, canSpinMegaPool } = get();
-    if (!canSpinMegaPool()) {
-      return { result: "COOLDOWN" };
-    }
-    set({ lastMegaPoolSpinAt: Date.now() });
-
-    const affordablePrizes = MEGA_POOL_PRIZES.filter((p) => p <= megaPoolAccumulated);
-    if (affordablePrizes.length === 0) {
-      return { result: "TRY_AGAIN" };
-    }
-    const won = affordablePrizes[Math.floor(Math.random() * affordablePrizes.length)];
-    get().resolveMegaPoolWin(won);
-    return { result: "WIN", amount: won };
-  },
 
   dismissArpgCongrats: () => set({ showArpgCongrats: false }),
 

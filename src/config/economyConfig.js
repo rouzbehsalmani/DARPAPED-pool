@@ -39,8 +39,26 @@ export const ARPG_TRIGGER_THRESHOLD = 0.02;
 
 export const CASH_REWARD_TIERS = [0.001, 0.01, 0.10];
 
-export const MEGA_POOL_PRIZES = [1.00, 2.00, 5.00, 10.00];
 export const MEGA_POOL_SPIN_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+// The wheel stays locked until the shared pool has built up to at least
+// this much - since it's also the highest prize on the wheel, once the
+// pool clears this bar every tier below it is automatically affordable too.
+export const MEGA_POOL_MIN_POOL_TO_SPIN = 10;
+
+// Real Spin Wheel visual, reusing the SpinWheel component. Weights are the
+// exact odds requested: $10 (1%), $5 (2%), $1 (4%), $0.50 (6%), $0.25 (10%),
+// $0.15 (15%), $0.10 (24%), $0.05 (38%) - sums to 100.
+export const MEGA_POOL_WHEEL_WEIGHTED_PRIZES = [
+  { icon: "cash", amount: 10, weight: 1, color: "#FFD700", prize: { type: "cash", amount: 10 } },
+  { icon: "cash", amount: 5, weight: 2, color: "#E8B438", prize: { type: "cash", amount: 5 } },
+  { icon: "cash", amount: 1, weight: 4, color: "#5FB6EE", prize: { type: "cash", amount: 1 } },
+  { icon: "cash", amount: 0.50, weight: 6, color: "#3FC9A6", prize: { type: "cash", amount: 0.50 } },
+  { icon: "cash", amount: 0.25, weight: 10, color: "#6B63E0", prize: { type: "cash", amount: 0.25 } },
+  { icon: "cash", amount: 0.15, weight: 15, color: "#8C8C9A", prize: { type: "cash", amount: 0.15 } },
+  { icon: "cash", amount: 0.10, weight: 24, color: "#4CAF50", prize: { type: "cash", amount: 0.10 } },
+  { icon: "cash", amount: 0.05, weight: 38, color: "#A0A0AE", prize: { type: "cash", amount: 0.05 } }
+];
 
 export const AUTO_SIMULATE_INTERVAL_MS = 2000;
 
@@ -51,9 +69,7 @@ export const GAMEPLAY_AD_INTERVAL = 4;
 
 // Energy / stamina cooldown - every play costs ENERGY_PER_PLAY, and the bar
 // refills passively from 0 to ENERGY_MAX over ENERGY_FULL_REGEN_MS (or the
-// faster ENERGY_FULL_REGEN_MS_VIP for active VIP users). This is what keeps
-// a play session from being over in a minute even though each individual
-// mini-game round is quick.
+// faster ENERGY_FULL_REGEN_MS_VIP for active VIP users).
 export const ENERGY_MAX = 100;
 export const ENERGY_PER_PLAY = 15; // ~6-7 plays drains a full bar
 export const ENERGY_FULL_REGEN_MS = 10 * 60 * 1000; // Free users: 10 min, 0 -> 100
@@ -67,9 +83,9 @@ export const ENERGY_FULL_REGEN_MS_VIP = 5 * 60 * 1000; // VIP users: 5 min, 0 ->
 // type is one of "silver" | "gold" | "diamond" | "cash" | "dud"
 //
 // Spin Wheel segments carry `icon` + `amount` (rendered as a small vector
-// icon + number on the wedge, see MaterialIcon) instead of a text label.
-// Wedge WEIGHT still drives the real odds (see SpinWheel.js) even though
-// every wedge is drawn the same visual size, like a normal casino wheel.
+// icon + number on the wedge) instead of a text label. Wedge WEIGHT still
+// drives the real odds even though every wedge is drawn the same visual
+// size, like a normal casino wheel.
 // ---------------------------------------------------------------------------
 
 export const SPIN_WHEEL_WEIGHTED_PRIZES = [

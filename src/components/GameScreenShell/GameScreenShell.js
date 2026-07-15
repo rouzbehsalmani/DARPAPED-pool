@@ -6,6 +6,8 @@ import PrizeResultModal from "../PrizeResultModal/PrizeResultModal";
 import AdBreakModal from "../AdBreakModal/AdBreakModal";
 import VipLockedNotice from "../VipLockedNotice/VipLockedNotice";
 import EnergyBar from "../EnergyBar/EnergyBar";
+import InternalAdBanner from "../InternalAdBanner/InternalAdBanner";
+import InfoButton from "../InfoButton/InfoButton";
 import { useEconomyStore } from "../../store/economyStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useEnergyStore } from "../../store/energyStore";
@@ -20,18 +22,30 @@ const formatCountdown = (ms) => {
 };
 
 // Shared shell used by every mini-game route. Centralizes:
-// - TopBar + title
+// - TopBar + title + per-game "You should know" info popup
 // - VIP gating (requireVip)
 // - Prize award + result modal
 // - Simulated ad-break cadence (registerGamePlay / AdBreakModal)
-// - Energy/stamina cooldown gate (EnergyBar) so a play session can't be
-//   over in a minute even though each mini-game round itself is quick
+// - Energy/stamina cooldown gate
+//
+// Layout is a ROW: [game column (flex:1, centered)] [energy column (fixed
+// width: gauge + internal self-promo banner)] - this way the game content
+// re-centers itself within the remaining space instead of the energy bar
+// floating on top and throwing off the visual balance.
 //
 // Usage:
-//   <GameScreenShell title="Spin the Wheel">
+//   <GameScreenShell title="Spin the Wheel" infoText="...">
 //     {(handleResult) => <SpinWheel segments={...} onResult={handleResult} />}
 //   </GameScreenShell>
-const GameScreenShell = ({ title, subtitle, accentColor = COLORS.textPrimary, requireVip = false, children }) => {
+const GameScreenShell = ({
+  title,
+  subtitle,
+  accentColor = COLORS.textPrimary,
+  requireVip = false,
+  infoTitle = "You should know",
+  infoText,
+  children
+}) => {
   const arpgCounterRef = useRef(null);
   const isVip = useSettingsStore((s) => s.isVip);
   const awardPrize = useEconomyStore((s) => s.awardPrize);
@@ -81,24 +95,33 @@ const GameScreenShell = ({ title, subtitle, accentColor = COLORS.textPrimary, re
   return (
     <SafeAreaView style={styles.safeArea}>
       <TopBar arpgCounterRef={arpgCounterRef} />
-      <LinearGradient colors={GRADIENTS.background} style={styles.body}>
-        <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-
-        {canPlay ? (
-          children(handleResult)
-        ) : (
-          <View style={styles.rechargeCard}>
-            <Text style={styles.rechargeTitle}>Recharging...</Text>
-            <Text style={styles.rechargeSubtitle}>
-              Come back in {formatCountdown(msUntilNextPlay())} for your next play
-            </Text>
-            {isVip && <Text style={styles.rechargeVipNote}>VIP: 2x faster recharge</Text>}
+      <LinearGradient colors={GRADIENTS.background} style={styles.bodyRow}>
+        <View style={styles.gameColumn}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: accentColor }]}>{title}</Text>
+            <InfoButton title={infoTitle} text={infoText} />
           </View>
-        )}
-      </LinearGradient>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-      <EnergyBar />
+          {canPlay ? (
+            children(handleResult)
+          ) : (
+            <View style={styles.rechargeCard}>
+              <Text style={styles.rechargeTitle}>Recharging...</Text>
+              <Text style={styles.rechargeSubtitle}>
+                Come back in {formatCountdown(msUntilNextPlay())} for your next play
+              </Text>
+              {isVip && <Text style={styles.rechargeVipNote}>VIP: 2x faster recharge</Text>}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.energyColumn}>
+          <EnergyBar />
+          <View style={styles.energyGap} />
+          <InternalAdBanner />
+        </View>
+      </LinearGradient>
 
       <PrizeResultModal
         visible={modalVisible}
@@ -113,8 +136,12 @@ const GameScreenShell = ({ title, subtitle, accentColor = COLORS.textPrimary, re
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bgDark },
-  body: { flex: 1, padding: SPACING.lg, alignItems: "center" },
-  title: { fontFamily: FONTS.bold, fontSize: 19, marginBottom: 4, alignSelf: "flex-start" },
+  bodyRow: { flex: 1, flexDirection: "row", padding: SPACING.lg },
+  gameColumn: { flex: 1, alignItems: "center" },
+  energyColumn: { width: 56, paddingLeft: SPACING.sm },
+  energyGap: { height: SPACING.sm },
+  titleRow: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8, marginBottom: 4 },
+  title: { fontFamily: FONTS.bold, fontSize: 19 },
   subtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 12, marginBottom: 8, alignSelf: "flex-start" },
   rechargeCard: {
     marginTop: 60,

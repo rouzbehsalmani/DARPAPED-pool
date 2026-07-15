@@ -40,6 +40,11 @@ export default function RootLayout() {
         <View style={styles.frameInner}>
           <Drawer
             screenOptions={{
+              // Force the classic slide-in/overlay drawer (hamburger icon
+              // toggles it) on EVERY screen size. Without this,
+              // react-navigation auto-switches to a permanently-visible
+              // sidebar on wide viewports, which is not what we want here.
+              drawerType: "front",
               headerStyle: { backgroundColor: COLORS.bgCard },
               headerTintColor: COLORS.gold,
               headerTitleStyle: { fontFamily: "Poppins_600SemiBold", fontSize: 16 },

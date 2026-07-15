@@ -72,7 +72,7 @@ const LuckyChests = ({ prizeWeights, onResult, disabled }) => {
 };
 
 const styles = StyleSheet.create({
-  wrapper: { alignItems: "center", paddingVertical: 20 },
+  wrapper: { alignItems: "center", paddingVertical: 36 },
   grid: { flexDirection: "row", flexWrap: "wrap", width: 260, justifyContent: "space-between" },
   chest: {
     width: 78,

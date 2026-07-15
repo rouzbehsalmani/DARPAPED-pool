@@ -1,46 +1,55 @@
 import React, { useRef, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, PanResponder } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, PanResponder, Image } from "react-native";
+import { COLORS, RADIUS, FONTS } from "../../theme/theme";
+import coverImage from "../../../assets/scratch-covers/default-cover.png";
 
-const COLS = 3;
-const ROWS = 2;
-const CELL_COUNT = COLS * ROWS;
-const CELL_SIZE = 82;
-const GAP = 12;
-const DOT_COLS = 3;
-const DOT_ROWS = 2;
-const DOTS_PER_CELL = DOT_COLS * DOT_ROWS;
-const REVEAL_DOT_THRESHOLD = 4; // out of 6 dots per cell
+const CARD_WIDTH = 270;
+const CARD_HEIGHT = 200;
+const ZONE_COLS = 3;
+const ZONE_ROWS = 2;
+const ZONE_COUNT = ZONE_COLS * ZONE_ROWS;
+const ZONE_WIDTH = CARD_WIDTH / ZONE_COLS;
+const ZONE_HEIGHT = CARD_HEIGHT / ZONE_ROWS;
 
-const buildCard = (icons) => {
+// Fine grid of "foil" tiles laid over the cover image - each tile crops the
+// SAME image (via an oversized Image shifted with a negative offset,
+// clipped by the tile's own overflow:hidden box), so removing a tile
+// reveals the real image underneath at that exact spot instead of just a
+// flat color. A circular brush (BRUSH_RADIUS) clears every tile it passes
+// over as the finger/mouse drags, like scratching real foil.
+const MASK_COLS = 15;
+const MASK_ROWS = 11;
+const TILE_WIDTH = CARD_WIDTH / MASK_COLS;
+const TILE_HEIGHT = CARD_HEIGHT / MASK_ROWS;
+const BRUSH_RADIUS = 26;
+const COMPLETE_THRESHOLD = 0.62; // card auto-finishes once this much foil is cleared
+
+const buildZones = (icons) => {
   const pool = [];
-  while (pool.length < CELL_COUNT) {
+  while (pool.length < ZONE_COUNT) {
     pool.push(icons[Math.floor(Math.random() * icons.length)]);
   }
   return pool.sort(() => Math.random() - 0.5);
 };
 
-const buildDotGrid = () => Array.from({ length: CELL_COUNT }, () => Array(DOTS_PER_CELL).fill(false));
-
-// A real drag-to-scratch card: the finger/mouse must be dragged across the
-// foil overlay (PanResponder tracks continuous movement). Each cell is
-// covered by a small grid of foil dots; dragging over a dot clears it, and
-// once enough of a cell's dots are cleared the icon underneath fully reveals.
-//
 // icons: string[]   prizeMap: { [icon]: prize }
-// zeroDud: if true and no 3-match occurs once all cells are revealed, a
-// guaranteed fallback prize is still awarded (VIP variant - no dud states).
+// zeroDud: if true and no 3-match occurs once the card is fully scratched,
+// a guaranteed fallback prize is still awarded (VIP variant - no dud states).
 const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
-  const [cells, setCells] = useState(() => buildCard(icons));
+  const [zones, setZones] = useState(() => buildZones(icons));
   const [, setTick] = useState(0);
-  const dotsRef = useRef(buildDotGrid());
-  const cellRevealedRef = useRef(Array(CELL_COUNT).fill(false));
+  const maskRef = useRef(null);
+  if (maskRef.current === null) {
+    maskRef.current = Array(MASK_COLS * MASK_ROWS).fill(true); // true = still covered
+  }
+  const revealedCountRef = useRef(0);
   const finishedRef = useRef(false);
 
   const forceRender = () => setTick((t) => t + 1);
 
   const resolve = () => {
     const counts = {};
-    cells.forEach((icon) => {
+    zones.forEach((icon) => {
       counts[icon] = (counts[icon] || 0) + 1;
     });
     const matchIcon = Object.keys(counts).find((icon) => counts[icon] >= 3);
@@ -55,82 +64,112 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
     }
   };
 
-  const revealDotAt = (cellIndex, dotIndex) => {
-    if (cellRevealedRef.current[cellIndex]) return;
-    if (dotsRef.current[cellIndex][dotIndex]) return;
-    dotsRef.current[cellIndex][dotIndex] = true;
+  const scratchAt = (x, y) => {
+    if (disabled || finishedRef.current) return;
+    const totalTiles = MASK_COLS * MASK_ROWS;
+    let changed = false;
 
-    const revealedCount = dotsRef.current[cellIndex].filter(Boolean).length;
-    if (revealedCount >= REVEAL_DOT_THRESHOLD) {
-      cellRevealedRef.current[cellIndex] = true;
-      if (cellRevealedRef.current.every(Boolean) && !finishedRef.current) {
-        finishedRef.current = true;
-        forceRender();
-        resolve();
-        return;
+    const colMin = Math.max(0, Math.floor((x - BRUSH_RADIUS) / TILE_WIDTH));
+    const colMax = Math.min(MASK_COLS - 1, Math.floor((x + BRUSH_RADIUS) / TILE_WIDTH));
+    const rowMin = Math.max(0, Math.floor((y - BRUSH_RADIUS) / TILE_HEIGHT));
+    const rowMax = Math.min(MASK_ROWS - 1, Math.floor((y + BRUSH_RADIUS) / TILE_HEIGHT));
+
+    for (let row = rowMin; row <= rowMax; row++) {
+      for (let col = colMin; col <= colMax; col++) {
+        const idx = row * MASK_COLS + col;
+        if (!maskRef.current[idx]) continue;
+        const cx = col * TILE_WIDTH + TILE_WIDTH / 2;
+        const cy = row * TILE_HEIGHT + TILE_HEIGHT / 2;
+        const dist = Math.hypot(cx - x, cy - y);
+        if (dist <= BRUSH_RADIUS) {
+          maskRef.current[idx] = false;
+          revealedCountRef.current += 1;
+          changed = true;
+        }
       }
     }
+
+    if (!changed) return;
     forceRender();
-  };
 
-  const handleTouch = (x, y) => {
-    if (disabled || finishedRef.current) return;
-    const col = Math.floor(x / (CELL_SIZE + GAP));
-    const row = Math.floor(y / (CELL_SIZE + GAP));
-    if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
-
-    const localX = x - col * (CELL_SIZE + GAP);
-    const localY = y - row * (CELL_SIZE + GAP);
-    if (localX > CELL_SIZE || localY > CELL_SIZE) return;
-
-    const dotCol = Math.min(DOT_COLS - 1, Math.max(0, Math.floor(localX / (CELL_SIZE / DOT_COLS))));
-    const dotRow = Math.min(DOT_ROWS - 1, Math.max(0, Math.floor(localY / (CELL_SIZE / DOT_ROWS))));
-    const cellIndex = row * COLS + col;
-    const dotIndex = dotRow * DOT_COLS + dotCol;
-    revealDotAt(cellIndex, dotIndex);
+    if (!finishedRef.current && revealedCountRef.current / totalTiles >= COMPLETE_THRESHOLD) {
+      finishedRef.current = true;
+      maskRef.current = maskRef.current.map(() => false); // clear the rest for a clean finish
+      forceRender();
+      resolve();
+    }
   };
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => handleTouch(evt.nativeEvent.locationX, evt.nativeEvent.locationY),
-      onPanResponderMove: (evt) => handleTouch(evt.nativeEvent.locationX, evt.nativeEvent.locationY)
+      onPanResponderGrant: (evt) => scratchAt(evt.nativeEvent.locationX, evt.nativeEvent.locationY),
+      onPanResponderMove: (evt) => scratchAt(evt.nativeEvent.locationX, evt.nativeEvent.locationY)
     })
   ).current;
 
   const resetCard = () => {
-    setCells(buildCard(icons));
-    dotsRef.current = buildDotGrid();
-    cellRevealedRef.current = Array(CELL_COUNT).fill(false);
+    setZones(buildZones(icons));
+    maskRef.current = Array(MASK_COLS * MASK_ROWS).fill(true);
+    revealedCountRef.current = 0;
     finishedRef.current = false;
     forceRender();
   };
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.grid} {...panResponder.panHandlers}>
-        {cells.map((icon, index) => {
-          const revealedDots = dotsRef.current[index];
-          const cellDone = cellRevealedRef.current[index];
+      <View style={styles.card} {...panResponder.panHandlers}>
+        {/* Revealed content: 6 prize zones + thin divider lines */}
+        {zones.map((icon, i) => {
+          const col = i % ZONE_COLS;
+          const row = Math.floor(i / ZONE_COLS);
           return (
-            <View key={index} style={[styles.cell, cellDone && styles.cellRevealed]}>
-              <Text style={styles.cellText}>{icon}</Text>
-              {!cellDone && (
-                <View style={styles.overlayGrid} pointerEvents="none">
-                  {revealedDots.map((isRevealed, dotIndex) => (
-                    <View
-                      key={dotIndex}
-                      style={[styles.overlayDot, isRevealed && styles.overlayDotRevealed]}
-                    />
-                  ))}
-                </View>
-              )}
+            <View
+              key={i}
+              style={[
+                styles.zone,
+                { left: col * ZONE_WIDTH, top: row * ZONE_HEIGHT, width: ZONE_WIDTH, height: ZONE_HEIGHT }
+              ]}
+            >
+              <Text style={styles.zoneIcon}>{icon}</Text>
             </View>
           );
         })}
+        <View style={[styles.dividerV, { left: ZONE_WIDTH }]} />
+        <View style={[styles.dividerV, { left: ZONE_WIDTH * 2 }]} />
+        <View style={[styles.dividerH, { top: ZONE_HEIGHT }]} />
+
+        {/* Foil mask: small tiles cropping the SAME cover image, removed one by one as scratched */}
+        {Array.from({ length: MASK_ROWS }).map((_, row) =>
+          Array.from({ length: MASK_COLS }).map((_, col) => {
+            const idx = row * MASK_COLS + col;
+            if (!maskRef.current[idx]) return null;
+            return (
+              <View
+                key={idx}
+                style={[
+                  styles.maskTile,
+                  { left: col * TILE_WIDTH, top: row * TILE_HEIGHT, width: TILE_WIDTH, height: TILE_HEIGHT }
+                ]}
+              >
+                <Image
+                  source={coverImage}
+                  resizeMode="cover"
+                  style={{
+                    position: "absolute",
+                    width: CARD_WIDTH,
+                    height: CARD_HEIGHT,
+                    left: -col * TILE_WIDTH,
+                    top: -row * TILE_HEIGHT
+                  }}
+                />
+              </View>
+            );
+          })
+        )}
       </View>
-      <Text style={styles.hint}>Drag across the cards to scratch</Text>
+      <Text style={styles.hint}>Drag across the card to scratch it off</Text>
       {finishedRef.current && (
         <TouchableOpacity style={styles.newCardButton} onPress={resetCard} activeOpacity={0.85}>
           <Text style={styles.newCardText}>Get New Card</Text>
@@ -141,47 +180,24 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
 };
 
 const styles = StyleSheet.create({
-  wrapper: { alignItems: "center", paddingVertical: 20 },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    width: CELL_SIZE * COLS + GAP * (COLS - 1),
-    justifyContent: "space-between"
-  },
-  cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 14,
-    backgroundColor: "#1A1A2E",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: GAP,
+  wrapper: { alignItems: "center", paddingVertical: 32 },
+  card: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: RADIUS.lg,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#3A3A55",
-    overflow: "hidden"
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.bgCard
   },
-  cellRevealed: { borderColor: "#FFD700" },
-  cellText: { fontSize: 30 },
-  overlayGrid: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    flexDirection: "row",
-    flexWrap: "wrap"
-  },
-  overlayDot: {
-    width: CELL_SIZE / DOT_COLS,
-    height: CELL_SIZE / DOT_ROWS,
-    backgroundColor: "#5A5A78",
-    borderWidth: 0.5,
-    borderColor: "#0F0F1E"
-  },
-  overlayDotRevealed: { backgroundColor: "transparent", borderColor: "transparent" },
-  hint: { color: "#77779A", fontSize: 11, marginTop: 4, marginBottom: 8 },
-  newCardButton: { marginTop: 12, backgroundColor: "#4CAF50", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 28 },
-  newCardText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 }
+  zone: { position: "absolute", alignItems: "center", justifyContent: "center" },
+  zoneIcon: { fontSize: 30 },
+  dividerV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: "rgba(255,255,255,0.12)" },
+  dividerH: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: "rgba(255,255,255,0.12)" },
+  maskTile: { position: "absolute", overflow: "hidden" },
+  hint: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 11, marginTop: 10 },
+  newCardButton: { marginTop: 12, backgroundColor: COLORS.success, borderRadius: RADIUS.md, paddingVertical: 12, paddingHorizontal: 28 },
+  newCardText: { color: "#FFFFFF", fontFamily: FONTS.semiBold, fontSize: 14 }
 });
 
 export default ScratchCard;

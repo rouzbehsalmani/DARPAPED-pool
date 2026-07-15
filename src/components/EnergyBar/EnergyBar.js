@@ -3,9 +3,9 @@ import { View, Text, StyleSheet } from "react-native";
 import { useEnergyStore } from "../../store/energyStore";
 import { COLORS, FONTS } from "../../theme/theme";
 
-// Vertical stamina/cooldown gauge shown on the right edge of every game
-// screen. Ticks once a second purely to re-read the lazily-computed energy
-// value from the store (see energyStore.js _sync).
+// Vertical stamina/cooldown gauge - now a normal flex child (not an
+// absolute overlay) so it reserves its own column and the game area next
+// to it re-centers naturally instead of the energy bar floating on top.
 const EnergyBar = () => {
   const getEnergy = useEnergyStore((s) => s.getEnergy);
   const [energy, setEnergy] = useState(() => getEnergy());
@@ -30,14 +30,7 @@ const EnergyBar = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    position: "absolute",
-    right: 10,
-    top: 90,
-    bottom: 130,
-    alignItems: "center",
-    width: 34
-  },
+  container: { flex: 1, alignItems: "center", width: "100%", paddingVertical: 6 },
   bolt: { fontSize: 14, marginBottom: 6 },
   track: {
     flex: 1,

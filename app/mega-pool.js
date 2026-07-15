@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from "react-native";
-import { useEconomyStore } from "../src/store/economyStore";
+import { View, Text, StyleSheet, SafeAreaView } from "react-native";
+import SpinWheel from "../src/components/SpinWheel/SpinWheel";
 import PrizeResultModal from "../src/components/PrizeResultModal/PrizeResultModal";
+import InfoButton from "../src/components/InfoButton/InfoButton";
+import { useEconomyStore } from "../src/store/economyStore";
+import { MEGA_POOL_WHEEL_WEIGHTED_PRIZES, MEGA_POOL_MIN_POOL_TO_SPIN } from "../src/config/economyConfig";
+import { COLORS, FONTS, RADIUS, SPACING } from "../src/theme/theme";
 
 const formatCooldown = (ms) => {
   if (ms <= 0) return "Ready";
@@ -11,15 +15,20 @@ const formatCooldown = (ms) => {
   return `${h}h ${m}m ${s}s`;
 };
 
+const INFO_TEXT =
+  "The Mega Pool is a shared jackpot funded by 30% of everyone's ad-view revenue across the whole app - " +
+  "the more the community plays, the bigger it gets. The wheel only unlocks once the pool has built up to " +
+  `at least $${MEGA_POOL_MIN_POOL_TO_SPIN.toFixed(2)}, since that's also the top prize on it. You can spin ` +
+  "once every 24 hours. Odds: $10 (1%), $5 (2%), $1 (4%), $0.50 (6%), $0.25 (10%), $0.15 (15%), $0.10 (24%), $0.05 (38%).";
+
 export default function MegaPoolRoute() {
   const megaPoolAccumulated = useEconomyStore((s) => s.megaPoolAccumulated);
   const lastMegaPoolSpinAt = useEconomyStore((s) => s.lastMegaPoolSpinAt);
-  const spinMegaPoolWheel = useEconomyStore((s) => s.spinMegaPoolWheel);
+  const claimMegaPoolPrize = useEconomyStore((s) => s.claimMegaPoolPrize);
 
   const [now, setNow] = useState(Date.now());
   const [resultPrize, setResultPrize] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [spinning, setSpinning] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -27,47 +36,38 @@ export default function MegaPoolRoute() {
   }, []);
 
   const cooldownRemaining = Math.max(0, 24 * 60 * 60 * 1000 - (now - lastMegaPoolSpinAt));
-  const canSpin = cooldownRemaining <= 0;
-  const buttonDisabled = !canSpin || spinning;
+  const cooldownReady = cooldownRemaining <= 0;
+  const poolFunded = megaPoolAccumulated >= MEGA_POOL_MIN_POOL_TO_SPIN;
+  const canSpin = cooldownReady && poolFunded;
 
-  const handleSpin = () => {
-    if (buttonDisabled) return;
-    setSpinning(true);
-    setTimeout(() => {
-      const outcome = spinMegaPoolWheel();
-      setSpinning(false);
-      if (outcome.result === "WIN") {
-        setResultPrize({ type: "cash", amount: outcome.amount });
-      } else {
-        setResultPrize({ type: "dud", amount: 0 });
-      }
-      setModalVisible(true);
-    }, 1200);
+  const handleResult = (prize) => {
+    claimMegaPoolPrize(prize.amount);
+    setResultPrize(prize);
+    setModalVisible(true);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.body}>
-        <Text style={styles.title}>Mega Pool Wheel</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Mega Pool Wheel</Text>
+          <InfoButton text={INFO_TEXT} />
+        </View>
 
         <View style={styles.card}>
           <Text style={styles.poolLabel}>Global Pool Balance</Text>
           <Text style={styles.poolValue}>${megaPoolAccumulated.toFixed(4)}</Text>
-          <Text style={styles.note}>
-            Prizes: $1.00 / $2.00 / $5.00 / $10.00. One spin every 24 hours. If the
-            pool can't cover a prize, the wheel lands on "Try Again Tomorrow".
-          </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.spinButton, buttonDisabled && styles.disabledButton]}
-          onPress={handleSpin}
-          disabled={buttonDisabled}
-        >
-          <Text style={[styles.spinButtonText, buttonDisabled && styles.spinButtonTextDisabled]}>
-            {spinning ? "Spinning..." : canSpin ? "Spin the Wheel" : formatCooldown(cooldownRemaining)}
+        {!poolFunded ? (
+          <Text style={styles.lockedNote}>
+            Locked until the pool reaches ${MEGA_POOL_MIN_POOL_TO_SPIN.toFixed(2)}
           </Text>
-        </TouchableOpacity>
+        ) : !cooldownReady ? (
+          <Text style={styles.lockedNote}>Next spin in {formatCooldown(cooldownRemaining)}</Text>
+        ) : null}
+
+        <SpinWheel segments={MEGA_POOL_WHEEL_WEIGHTED_PRIZES} onResult={handleResult} disabled={!canSpin} />
       </View>
 
       <PrizeResultModal
@@ -80,30 +80,23 @@ export default function MegaPoolRoute() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#0F0F1E" },
-  body: { flex: 1, padding: 20 },
-  title: { color: "#FFFFFF", fontSize: 18, fontWeight: "700", marginBottom: 20 },
+  safeArea: { flex: 1, backgroundColor: COLORS.bgDark },
+  body: { flex: 1, padding: SPACING.lg, alignItems: "center" },
+  titleRow: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8, marginBottom: 16 },
+  title: { color: COLORS.textPrimary, fontFamily: FONTS.bold, fontSize: 18 },
   card: {
-    backgroundColor: "#1A1A2E",
-    borderRadius: 16,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.lg,
     padding: 20,
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#FFD700"
+    borderColor: COLORS.gold,
+    width: "100%"
   },
-  poolLabel: { color: "#AAAAC0", fontSize: 12, marginBottom: 6 },
-  poolValue: { color: "#FFD700", fontSize: 28, fontWeight: "800", marginBottom: 12 },
-  note: { color: "#77779A", fontSize: 12, textAlign: "center", lineHeight: 18 },
-  spinButton: {
-    backgroundColor: "#FFD700",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center"
-  },
-  disabledButton: { backgroundColor: "#26264A", opacity: 0.85 },
-  spinButtonText: { color: "#1A1A2E", fontWeight: "700", fontSize: 13 },
-  spinButtonTextDisabled: { color: "#AAAAC0" }
+  poolLabel: { color: COLORS.textSecondary, fontFamily: FONTS.regular, fontSize: 12, marginBottom: 6 },
+  poolValue: { color: COLORS.gold, fontFamily: FONTS.bold, fontSize: 28 },
+  lockedNote: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 12, marginBottom: 8 }
 });
 
 // FILE LOCATION: app/mega-pool.js (REPLACE existing file)
