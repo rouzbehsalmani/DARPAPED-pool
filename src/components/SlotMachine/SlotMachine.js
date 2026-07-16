@@ -1,21 +1,25 @@
-import React, { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, Animated, Easing, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { pickWeighted } from "../../utils/weightedRandom";
 import { FONTS } from "../../theme/theme";
 
 const WIN_CHANCE = 0.22;
-const RESULT_SUSPENSE_MS = 350; // brief pause after the last reel stops, before the result fires
+const RESULT_SUSPENSE_MS = 350;
+const ITEM_HEIGHT = 80;
+const TICK_MS = 150; // slower, smoother steps than before
 
 // symbolWeights: [{ symbol, weight }]   prizeMap: { [symbol]: prize }
 // zeroDud: if true, every pull is forced into a 3-match (VIP variant).
 //
-// Each reel is a real scrolling strip, not 3 independently-randomized
-// slots: every tick shifts the whole strip down by one - the bottom symbol
-// exits, the middle symbol becomes the new bottom, the top symbol becomes
-// the new middle, and one fresh symbol enters at the top. That's what
-// gives it the "fixed symbols flowing past a window" feel of a real
-// mechanical reel instead of random flicker.
+// Each reel is a real ANIMATED scrolling strip - a fixed array of 4 symbols
+// [hidden-above, top, middle, bottom] that smoothly slides down by exactly
+// one slot per tick (via Animated.timing, not an instant state swap): the
+// bottom symbol exits, middle becomes bottom, top becomes middle, and the
+// hidden-above symbol slides into view as the new top. A brand new random
+// symbol is then queued into the hidden slot for the next tick. This is
+// what gives the "fixed symbols flowing past a window" feel instead of
+// everything flickering to new random values every frame.
 const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) => {
   const symbols = symbolWeights.map((s) => s.symbol);
   const randomSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
@@ -23,26 +27,59 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
     pickWeighted(symbolWeights.map((s) => ({ value: s.symbol, weight: s.weight })));
 
   const [reels, setReels] = useState([
-    [symbols[0], symbols[0], symbols[0]],
-    [symbols[0], symbols[0], symbols[0]],
-    [symbols[0], symbols[0], symbols[0]]
+    [symbols[0], symbols[0], symbols[0], symbols[0]],
+    [symbols[0], symbols[0], symbols[0], symbols[0]],
+    [symbols[0], symbols[0], symbols[0], symbols[0]]
   ]);
   const [spinning, setSpinning] = useState(false);
-  const timers = useRef([]);
+  const scrollAnims = useRef([
+    new Animated.Value(-ITEM_HEIGHT),
+    new Animated.Value(-ITEM_HEIGHT),
+    new Animated.Value(-ITEM_HEIGHT)
+  ]).current;
 
-  const clearTimers = () => {
-    timers.current.forEach((t) => clearTimeout(t));
-    timers.current = [];
+  // Runs one reel's full spin: a series of smooth one-slot shifts, landing
+  // `finalSymbol` in the middle exactly two ticks before the reel stops
+  // (since a value queued into the hidden slot takes two shifts to reach
+  // the middle position).
+  const runReel = (reelIndex, finalSymbol, duration, onSettled) => {
+    const totalTicks = Math.max(4, Math.round(duration / TICK_MS));
+    let tick = 0;
+
+    const stepOnce = () => {
+      tick += 1;
+      const isInjectTick = tick === totalTicks - 2;
+      const isLastTick = tick === totalTicks;
+      const nextValue = isInjectTick ? finalSymbol : randomSymbol();
+
+      scrollAnims[reelIndex].setValue(-ITEM_HEIGHT);
+      Animated.timing(scrollAnims[reelIndex], {
+        toValue: 0,
+        duration: TICK_MS,
+        easing: Easing.linear,
+        useNativeDriver: true
+      }).start(() => {
+        setReels((prev) => {
+          const next = [...prev];
+          next[reelIndex] = [nextValue, ...prev[reelIndex].slice(0, 3)];
+          return next;
+        });
+        scrollAnims[reelIndex].setValue(-ITEM_HEIGHT);
+
+        if (isLastTick) {
+          onSettled();
+        } else {
+          stepOnce();
+        }
+      });
+    };
+
+    stepOnce();
   };
-
-  // Shifts one reel's strip down by one slot: new symbol enters at top,
-  // everything else moves down one, old bottom symbol exits.
-  const shiftDown = (strip, newTop) => [newTop, strip[0], strip[1]];
 
   const pull = () => {
     if (spinning || disabled) return;
     setSpinning(true);
-    clearTimers();
 
     let finalMiddles;
     if (zeroDud || Math.random() < WIN_CHANCE) {
@@ -55,47 +92,25 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
       }
     }
 
-    [0, 1, 2].forEach((reelIndex) => {
-      const spinDuration = 900 + reelIndex * 600;
-      const interval = 90;
-      let elapsed = 0;
-
-      const cycle = () => {
-        elapsed += interval;
-
-        if (elapsed >= spinDuration) {
-          // Final shift places the real result into the middle slot, still
-          // continuing the same downward-flowing motion (no jarring jump).
-          setReels((prev) => {
-            const next = [...prev];
-            next[reelIndex] = shiftDown(prev[reelIndex], randomSymbol());
-            next[reelIndex][1] = finalMiddles[reelIndex];
-            return next;
-          });
-          if (reelIndex === 2) {
-            timers.current.push(
-              setTimeout(() => {
-                setSpinning(false);
-                const isWin = finalMiddles[0] === finalMiddles[1] && finalMiddles[1] === finalMiddles[2];
-                if (isWin) {
-                  onResult(prizeMap[finalMiddles[0]], { symbol: finalMiddles[0] });
-                } else {
-                  onResult({ type: "dud", amount: 0 }, null);
-                }
-              }, RESULT_SUSPENSE_MS)
-            );
+    let settledCount = 0;
+    const onReelSettled = () => {
+      settledCount += 1;
+      if (settledCount === 3) {
+        setTimeout(() => {
+          setSpinning(false);
+          const isWin = finalMiddles[0] === finalMiddles[1] && finalMiddles[1] === finalMiddles[2];
+          if (isWin) {
+            onResult(prizeMap[finalMiddles[0]], { symbol: finalMiddles[0] });
+          } else {
+            onResult({ type: "dud", amount: 0 }, null);
           }
-          return;
-        }
+        }, RESULT_SUSPENSE_MS);
+      }
+    };
 
-        setReels((prev) => {
-          const next = [...prev];
-          next[reelIndex] = shiftDown(prev[reelIndex], randomSymbol());
-          return next;
-        });
-        timers.current.push(setTimeout(cycle, interval));
-      };
-      timers.current.push(setTimeout(cycle, interval));
+    [0, 1, 2].forEach((reelIndex) => {
+      const duration = 1400 + reelIndex * 700;
+      runReel(reelIndex, finalMiddles[reelIndex], duration, onReelSettled);
     });
   };
 
@@ -104,11 +119,16 @@ const SlotMachine = ({ symbolWeights, prizeMap, onResult, zeroDud, disabled }) =
       <View style={styles.reelsRow}>
         {reels.map((strip, i) => (
           <View key={i} style={styles.reel}>
-            <Text style={styles.symbolGhost}>{strip[0]}</Text>
-            <View style={styles.paylineRow}>
-              <Text style={styles.symbolMain}>{strip[1]}</Text>
+            <View style={styles.viewport}>
+              <Animated.View style={{ transform: [{ translateY: scrollAnims[i] }] }}>
+                {strip.map((sym, idx) => (
+                  <View key={idx} style={styles.itemSlot}>
+                    <Text style={styles.symbolText}>{sym}</Text>
+                  </View>
+                ))}
+              </Animated.View>
+              <View style={styles.paylineOverlay} pointerEvents="none" />
             </View>
-            <Text style={styles.symbolGhost}>{strip[2]}</Text>
           </View>
         ))}
       </View>
@@ -131,28 +151,29 @@ const styles = StyleSheet.create({
   reelsRow: { flexDirection: "row", marginBottom: 24 },
   reel: {
     width: 78,
-    height: 270,
+    height: ITEM_HEIGHT * 3 + 30,
     backgroundColor: "#26264A",
     borderRadius: 14,
     marginHorizontal: 6,
-    alignItems: "center",
-    justifyContent: "space-between",
     borderWidth: 1,
     borderColor: "#FFD700",
-    paddingVertical: 14,
+    paddingVertical: 15,
     overflow: "hidden"
   },
-  symbolGhost: { fontSize: 30, opacity: 0.35 },
-  paylineRow: {
-    width: "100%",
-    paddingVertical: 8,
-    alignItems: "center",
+  viewport: { height: ITEM_HEIGHT * 3, width: "100%", overflow: "hidden" },
+  itemSlot: { height: ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
+  symbolText: { fontSize: 34 },
+  paylineOverlay: {
+    position: "absolute",
+    top: ITEM_HEIGHT,
+    left: 0,
+    right: 0,
+    height: ITEM_HEIGHT,
     backgroundColor: "rgba(255,215,0,0.10)",
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: "rgba(255,215,0,0.35)"
   },
-  symbolMain: { fontSize: 40 },
   lever: { paddingHorizontal: 36, paddingVertical: 14, borderRadius: 16 },
   leverDisabled: { opacity: 0.5 },
   leverText: { color: "#FFFFFF", fontFamily: FONTS.bold, fontSize: 15 }

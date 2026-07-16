@@ -11,18 +11,12 @@ const ZONE_COUNT = ZONE_COLS * ZONE_ROWS;
 const ZONE_WIDTH = CARD_WIDTH / ZONE_COLS;
 const ZONE_HEIGHT = CARD_HEIGHT / ZONE_ROWS;
 
-// Fine grid of "foil" tiles laid over the cover image - each tile crops the
-// SAME image (via an oversized Image shifted with a negative offset,
-// clipped by the tile's own overflow:hidden box), so removing a tile
-// reveals the real image underneath at that exact spot instead of just a
-// flat color. A circular brush (BRUSH_RADIUS) clears every tile it passes
-// over as the finger/mouse drags, like scratching real foil.
 const MASK_COLS = 15;
 const MASK_ROWS = 11;
 const TILE_WIDTH = CARD_WIDTH / MASK_COLS;
 const TILE_HEIGHT = CARD_HEIGHT / MASK_ROWS;
 const BRUSH_RADIUS = 26;
-const COMPLETE_THRESHOLD = 0.62; // card auto-finishes once this much foil is cleared
+const COMPLETE_THRESHOLD = 0.62;
 
 const buildZones = (icons) => {
   const pool = [];
@@ -40,7 +34,7 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
   const [, setTick] = useState(0);
   const maskRef = useRef(null);
   if (maskRef.current === null) {
-    maskRef.current = Array(MASK_COLS * MASK_ROWS).fill(true); // true = still covered
+    maskRef.current = Array(MASK_COLS * MASK_ROWS).fill(true);
   }
   const revealedCountRef = useRef(0);
   const finishedRef = useRef(false);
@@ -94,7 +88,7 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
 
     if (!finishedRef.current && revealedCountRef.current / totalTiles >= COMPLETE_THRESHOLD) {
       finishedRef.current = true;
-      maskRef.current = maskRef.current.map(() => false); // clear the rest for a clean finish
+      maskRef.current = maskRef.current.map(() => false);
       forceRender();
       resolve();
     }
@@ -102,12 +96,6 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
 
   const panResponder = useRef(
     PanResponder.create({
-      // Claim the responder immediately and don't let a child (the foil
-      // tile <Image>s) steal it - this is what was letting the browser's
-      // native "drag this image" gesture hijack the touch instead of our
-      // scratch logic. onStartShouldSetPanResponderCapture (capture phase,
-      // fires before children) plus pointerEvents="none" on the tiles
-      // below is the actual fix.
       onStartShouldSetPanResponder: () => true,
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: () => true,
@@ -128,8 +116,7 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.card} {...panResponder.panHandlers}>
-        {/* Revealed content: 6 prize zones + thin divider lines */}
+      <View style={[styles.card, { userSelect: "none" }]} {...panResponder.panHandlers}>
         {zones.map((icon, i) => {
           const col = i % ZONE_COLS;
           const row = Math.floor(i / ZONE_COLS);
@@ -150,11 +137,6 @@ const ScratchCard = ({ icons, prizeMap, onResult, zeroDud, disabled }) => {
         <View pointerEvents="none" style={[styles.dividerV, { left: ZONE_WIDTH * 2 }]} />
         <View pointerEvents="none" style={[styles.dividerH, { top: ZONE_HEIGHT }]} />
 
-        {/* Foil mask: small tiles cropping the SAME cover image, removed one
-            by one as scratched. pointerEvents="none" is critical here - it
-            stops these <Image> tiles from ever receiving the touch/mouse
-            event themselves (which is what was triggering the browser's
-            native image-drag instead of our scratch gesture). */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           {Array.from({ length: MASK_ROWS }).map((_, row) =>
             Array.from({ length: MASK_COLS }).map((_, col) => {

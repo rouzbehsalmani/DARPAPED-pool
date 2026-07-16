@@ -5,7 +5,6 @@ import { COLORS, RADIUS, FONTS } from "../../theme/theme";
 // Self-promotion strip - NOT a third-party ad network placement. Cycles
 // through whatever's listed in PROMO_SLOTS so you can cross-promote your
 // other apps/products here. Edit this array to point at your own startups.
-// Rendered as a wide horizontal banner under the game area.
 const PROMO_SLOTS = [
   { emoji: "🚀", title: "More from us", subtitle: "Check out our other apps" }
 ];
@@ -26,7 +25,7 @@ const InternalAdBanner = () => {
   const slot = PROMO_SLOTS[index];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { userSelect: "none" }]}>
       <Text style={styles.emoji}>{slot.emoji}</Text>
       <View style={styles.textCol}>
         <Text style={styles.title}>{slot.title}</Text>

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Drawer } from "expo-router/drawer";
+import { Stack } from "expo-router";
 import {
   useFonts,
   Poppins_400Regular,
@@ -10,25 +10,16 @@ import {
   Poppins_700Bold
 } from "@expo-google-fonts/poppins";
 import { initAdNetwork } from "../src/services/adNetworkService";
+import AppHeader from "../src/components/AppHeader/AppHeader";
+import AppMenu from "../src/components/AppMenu/AppMenu";
 import { COLORS } from "../src/theme/theme";
 
-// Every route file under app/ becomes a navigable screen automatically
-// (expo-router file-based routing) - that part is fine and desired. But
-// the Drawer would ALSO list every one of them in the visible menu unless
-// told not to. These mini-game routes are only ever reached via
-// router.push() from Main Game Selection / VIP Games, so they're hidden
-// from the drawer's own list with drawerItemStyle height:0 below.
-const HIDDEN_ROUTE_NAMES = [
-  "spin-wheel",
-  "scratch-card",
-  "slot-machine",
-  "lucky-chests",
-  "vip-spin-wheel",
-  "vip-scratch-card",
-  "vip-slot-machine",
-  "vip-lucky-chests"
-];
-
+// Switched from expo-router/drawer to a plain Stack + our own AppHeader/
+// AppMenu. The Drawer navigator was auto-switching to a permanently-visible
+// sidebar on wide viewports no matter what drawerType was set to - this
+// custom menu is fully within our control: AppMenu renders nothing at all
+// unless menuStore.isOpen is true, so there is no ambiguity about whether
+// it can show up on its own.
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
@@ -52,72 +43,34 @@ export default function RootLayout() {
       {/* Caps the app to a phone-like width and centers it - on an actual
           phone this is always wider than the screen so it has no visible
           effect; on a wide desktop browser it stops the UI from stretching
-          into a "website" shape. */}
+          into a "website" shape. userSelect:none also stops the browser's
+          native text-selection drag from ever hijacking scratch/drag
+          gestures anywhere in the app. */}
       <View style={styles.frameOuter}>
-        <View style={styles.frameInner}>
-          <Drawer
+        <View style={[styles.frameInner, { userSelect: "none" }]}>
+          <Stack
             screenOptions={{
-              // Force the classic slide-in/overlay drawer (hamburger icon
-              // toggles it) on EVERY screen size, instead of react-
-              // navigation's default of pinning it open as a permanent
-              // sidebar on wide viewports.
-              drawerType: "front",
-              headerStyle: { backgroundColor: COLORS.bgCard },
-              headerTintColor: COLORS.gold,
-              headerTitleStyle: { fontFamily: "Poppins_600SemiBold", fontSize: 16 },
-              drawerActiveTintColor: COLORS.gold,
-              drawerInactiveTintColor: COLORS.textSecondary,
-              drawerActiveBackgroundColor: COLORS.bgChip,
-              drawerStyle: { backgroundColor: COLORS.bgDark, width: 270 },
-              drawerLabelStyle: { fontFamily: "Poppins_500Medium", fontSize: 14 },
-              drawerItemStyle: { borderRadius: 12, marginHorizontal: 8 }
+              header: (props) => <AppHeader {...props} />
             }}
           >
-            <Drawer.Screen
-              name="index"
-              options={{ drawerLabel: "🎮  Main Game Selection", title: "DARPAPED" }}
-            />
-            <Drawer.Screen
-              name="wallet"
-              options={{ drawerLabel: "💰  Wallet", title: "Wallet" }}
-            />
-            <Drawer.Screen
-              name="exchange"
-              options={{ drawerLabel: "🔄  Exchange (Convert Materials)", title: "Exchange" }}
-            />
-            <Drawer.Screen
-              name="subscription"
-              options={{ drawerLabel: "👑  VIP Pass (Subscription)", title: "VIP Pass" }}
-            />
-            <Drawer.Screen
-              name="mega-pool"
-              options={{ drawerLabel: "🎡  Mega Pool Wheel", title: "Mega Pool Wheel" }}
-            />
-            <Drawer.Screen
-              name="vip-games"
-              options={{ drawerLabel: "⭐  VIP Games", title: "VIP Games" }}
-            />
-            <Drawer.Screen
-              name="debug"
-              options={{ drawerLabel: "🐞  Debug / Economy Test", title: "Debug Panel" }}
-            />
-            <Drawer.Screen
-              name="settings"
-              options={{ drawerLabel: "⚙️  Settings", title: "Settings" }}
-            />
-            {HIDDEN_ROUTE_NAMES.map((name) => (
-              <Drawer.Screen
-                key={name}
-                name={name}
-                options={{
-                  title: name,
-                  drawerItemStyle: { height: 0, marginVertical: 0, padding: 0 },
-                  drawerLabel: () => null,
-                  drawerIcon: () => null
-                }}
-              />
-            ))}
-          </Drawer>
+            <Stack.Screen name="index" options={{ title: "Main Game Selection" }} />
+            <Stack.Screen name="wallet" options={{ title: "Wallet" }} />
+            <Stack.Screen name="exchange" options={{ title: "Exchange" }} />
+            <Stack.Screen name="subscription" options={{ title: "VIP Pass" }} />
+            <Stack.Screen name="mega-pool" options={{ title: "Mega Pool Wheel" }} />
+            <Stack.Screen name="vip-games" options={{ title: "VIP Games" }} />
+            <Stack.Screen name="debug" options={{ title: "Debug Panel" }} />
+            <Stack.Screen name="settings" options={{ title: "Settings" }} />
+            <Stack.Screen name="spin-wheel" options={{ title: "Spin the Wheel" }} />
+            <Stack.Screen name="scratch-card" options={{ title: "Scratch Card" }} />
+            <Stack.Screen name="slot-machine" options={{ title: "Slot Machine" }} />
+            <Stack.Screen name="lucky-chests" options={{ title: "Lucky Chests" }} />
+            <Stack.Screen name="vip-spin-wheel" options={{ title: "VIP Spin the Wheel" }} />
+            <Stack.Screen name="vip-scratch-card" options={{ title: "VIP Scratch Card" }} />
+            <Stack.Screen name="vip-slot-machine" options={{ title: "VIP Slot Machine" }} />
+            <Stack.Screen name="vip-lucky-chests" options={{ title: "VIP Lucky Chests" }} />
+          </Stack>
+          <AppMenu />
         </View>
       </View>
     </GestureHandlerRootView>
