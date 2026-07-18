@@ -1,18 +1,17 @@
 // src/services/adProviders/index.js
 //
-// One entry per ad network. Today every provider is a simulated stub with
-// identical behavior - only `id` differs. Later, replace each provider's
-// showRewardedAd() body with that specific network's real SDK call (AdMob,
-// Unity Ads, IronSource, AppLovin MAX, Meta Audience Network, etc.). The
-// rotation logic in ../adNetworkService.js never has to change, since it
-// only ever calls provider.showRewardedAd() through this same interface.
-//
-// To add/remove a network, just add/remove an entry in AD_PROVIDERS below.
-// TODO(Phase 10): rename these three placeholders to your actual chosen
-// networks and swap each showRewardedAd() body for that SDK's real call.
+// One entry per ad network. `admobProvider` is a REAL integration that only
+// activates once you've installed react-native-google-mobile-ads, set its
+// env vars, and done a native EAS build (see admob.js). The rest are still
+// simulated stubs - swap each one's showRewardedAd() for that network's
+// real SDK (Unity Ads, AppLovin MAX, ironSource, etc.) the same way, using
+// admob.js as the template. The rotation logic in ../adNetworkService.js
+// never has to change - it only ever calls provider.showRewardedAd()
+// through this same interface.
 
 import { AD_REVENUE_BY_TIER } from "../../config/economyConfig";
 import { detectAdTier } from "../geoTierService";
+import { admobProvider, isAdmobAvailable } from "./admob";
 
 function makeStubProvider(id) {
   return {
@@ -27,10 +26,14 @@ function makeStubProvider(id) {
   };
 }
 
+// TODO(Phase 10): rename/replace these placeholders with your actual chosen
+// networks (Unity Ads, AppLovin MAX, ironSource, Mintegral, Pangle, InMobi,
+// Meta Audience Network - see .env.example), following admob.js as the
+// pattern for a real one vs. makeStubProvider for a not-yet-wired one.
 export const AD_PROVIDERS = [
-  makeStubProvider("provider_a"),
+  ...(isAdmobAvailable ? [admobProvider] : []),
   makeStubProvider("provider_b"),
   makeStubProvider("provider_c")
 ];
 
-// FILE LOCATION: src/services/adProviders/index.js (NEW file)
+// FILE LOCATION: src/services/adProviders/index.js (REPLACE existing file)

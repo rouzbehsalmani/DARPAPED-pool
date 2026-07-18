@@ -5,6 +5,7 @@ import PrizeResultModal from "../src/components/PrizeResultModal/PrizeResultModa
 import InfoButton from "../src/components/InfoButton/InfoButton";
 import { useEconomyStore } from "../src/store/economyStore";
 import { MEGA_POOL_WHEEL_WEIGHTED_PRIZES, MEGA_POOL_MIN_POOL_TO_SPIN } from "../src/config/economyConfig";
+import { megaPoolSpinRemote } from "../src/services/gameApi";
 import { COLORS, FONTS, RADIUS, SPACING } from "../src/theme/theme";
 
 const formatCooldown = (ms) => {
@@ -41,6 +42,10 @@ export default function MegaPoolRoute() {
   const canSpin = cooldownReady && poolFunded;
 
   const handleResult = (prize) => {
+    // In local demo mode this applies the split client-side. Once Supabase
+    // is configured, megaPoolSpinRemote() already applied it server-side -
+    // this local call just keeps the on-screen numbers in sync immediately
+    // instead of waiting on a refetch.
     claimMegaPoolPrize(prize.amount);
     setResultPrize(prize);
     setModalVisible(true);
@@ -60,21 +65,20 @@ export default function MegaPoolRoute() {
         </View>
 
         {!poolFunded ? (
-          <Text style={styles.lockedNote}>
-            Locked until the pool reaches ${MEGA_POOL_MIN_POOL_TO_SPIN.toFixed(2)}
-          </Text>
+          <Text style={styles.lockedNote}>Locked until the pool reaches ${MEGA_POOL_MIN_POOL_TO_SPIN.toFixed(2)}</Text>
         ) : !cooldownReady ? (
           <Text style={styles.lockedNote}>Next spin in {formatCooldown(cooldownRemaining)}</Text>
         ) : null}
 
-        <SpinWheel segments={MEGA_POOL_WHEEL_WEIGHTED_PRIZES} onResult={handleResult} disabled={!canSpin} />
+        <SpinWheel
+          segments={MEGA_POOL_WHEEL_WEIGHTED_PRIZES}
+          onResult={handleResult}
+          disabled={!canSpin}
+          resolveWinner={megaPoolSpinRemote}
+        />
       </View>
 
-      <PrizeResultModal
-        visible={modalVisible}
-        prize={resultPrize}
-        onClose={() => setModalVisible(false)}
-      />
+      <PrizeResultModal visible={modalVisible} prize={resultPrize} onClose={() => setModalVisible(false)} />
     </SafeAreaView>
   );
 }

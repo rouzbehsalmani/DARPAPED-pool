@@ -9,7 +9,7 @@ import { COLORS, GRADIENTS, FONTS } from "../../theme/theme";
 const SIZE = 260;
 const CENTER = SIZE / 2;
 const RADIUS = SIZE / 2 - 6;
-const LABEL_RADIUS = RADIUS * 0.82; // pushed close to the rim, away from center
+const LABEL_RADIUS = RADIUS * 0.82;
 const LABEL_BOX = 40;
 
 const polarToCartesian = (cx, cy, r, angleDeg) => {
@@ -24,16 +24,16 @@ const describeWedge = (cx, cy, r, startAngle, endAngle) => {
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
 };
 
-// A real circular wheel with EQUAL-SIZED wedges, like a normal casino wheel.
-// The real odds live only in each segment's `weight` (used to pick the
-// winner) - visual size never encodes probability.
+// A real circular wheel with EQUAL-SIZED wedges. Odds live only in each
+// segment's `weight`.
 //
-// Icon + number labels sit near the rim (not the center) and are
-// counter-rotated live against the wheel's own spin, so they always stay
-// horizontal / right-side-up on screen no matter how the wheel is
-// oriented - only their ORBIT position follows the wedge, not their tilt.
-// segments: [{ icon, amount, weight, color, prize }]
-const SpinWheel = ({ segments, onResult, disabled }) => {
+// resolveWinner (optional): an async function returning { winnerIndex,
+// prize } from a server (see src/services/gameApi.js) - when provided and
+// it returns a result, THAT winner is used and its `prize` is what gets
+// awarded (server-authoritative). When absent, not configured yet, or the
+// call fails, falls back to the same local weighted pick as always, so
+// nothing breaks before you wire up a backend.
+const SpinWheel = ({ segments, onResult, disabled, resolveWinner }) => {
   const [spinning, setSpinning] = useState(false);
   const rotation = useRef(new Animated.Value(0)).current;
   const currentRotationRef = useRef(0);
@@ -45,17 +45,26 @@ const SpinWheel = ({ segments, onResult, disabled }) => {
     endAngle: (i + 1) * sliceAngle
   }));
 
-  const spin = () => {
+  const spin = async () => {
     if (spinning || disabled) return;
     setSpinning(true);
 
-    const winnerIndex = pickWeightedIndex(segments.map((s) => s.weight));
+    let winnerIndex;
+    let remotePrize = null;
+    if (resolveWinner) {
+      const remote = await resolveWinner();
+      if (remote && typeof remote.winnerIndex === "number") {
+        winnerIndex = remote.winnerIndex;
+        remotePrize = remote.prize;
+      }
+    }
+    if (winnerIndex === undefined) {
+      winnerIndex = pickWeightedIndex(segments.map((s) => s.weight));
+    }
+
     const winner = wedges[winnerIndex];
     const midAngle = winner.startAngle + sliceAngle / 2;
 
-    // Land exactly on the winner regardless of where the wheel currently
-    // rests (fixes drift that would otherwise creep in after every repeat
-    // spin): compute how far to rotate FROM the current resting angle.
     const currentVisual = ((currentRotationRef.current % 360) + 360) % 360;
     const desiredVisual = (360 - midAngle) % 360;
     let delta = desiredVisual - currentVisual;
@@ -72,23 +81,12 @@ const SpinWheel = ({ segments, onResult, disabled }) => {
     }).start(() => {
       currentRotationRef.current = target;
       setSpinning(false);
-      onResult(winner.prize, winner);
+      onResult(remotePrize || winner.prize, winner);
     });
   };
 
-  const spinDeg = rotation.interpolate({
-    inputRange: [0, 360],
-    outputRange: ["0deg", "360deg"]
-  });
-
-  // Exact negative of the wheel's own rotation - applied to each label so
-  // its orientation cancels the parent's spin while its position (which
-  // also comes from the parent transform) still correctly orbits with the
-  // wedge underneath it.
-  const counterSpinDeg = rotation.interpolate({
-    inputRange: [0, 360],
-    outputRange: ["0deg", "-360deg"]
-  });
+  const spinDeg = rotation.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "360deg"] });
+  const counterSpinDeg = rotation.interpolate({ inputRange: [0, 360], outputRange: ["0deg", "-360deg"] });
 
   return (
     <View style={styles.wrapper}>
@@ -115,11 +113,7 @@ const SpinWheel = ({ segments, onResult, disabled }) => {
                 key={i}
                 style={[
                   styles.labelBox,
-                  {
-                    left: pos.x - LABEL_BOX / 2,
-                    top: pos.y - LABEL_BOX / 2,
-                    transform: [{ rotate: counterSpinDeg }]
-                  }
+                  { left: pos.x - LABEL_BOX / 2, top: pos.y - LABEL_BOX / 2, transform: [{ rotate: counterSpinDeg }] }
                 ]}
                 pointerEvents="none"
               >
@@ -164,19 +158,8 @@ const styles = StyleSheet.create({
     borderRightColor: "transparent",
     borderTopColor: COLORS.gold
   },
-  labelBox: {
-    position: "absolute",
-    width: LABEL_BOX,
-    height: LABEL_BOX,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  labelAmount: {
-    color: "#0F0F1E",
-    fontFamily: FONTS.bold,
-    fontSize: 11,
-    marginTop: 1
-  },
+  labelBox: { position: "absolute", width: LABEL_BOX, height: LABEL_BOX, alignItems: "center", justifyContent: "center" },
+  labelAmount: { color: "#0F0F1E", fontFamily: FONTS.bold, fontSize: 11, marginTop: 1 },
   hub: {
     position: "absolute",
     top: SIZE / 2 - 28,

@@ -2,6 +2,7 @@ import React from "react";
 import GameScreenShell from "../src/components/GameScreenShell/GameScreenShell";
 import SpinWheel from "../src/components/SpinWheel/SpinWheel";
 import { SPIN_WHEEL_WEIGHTED_PRIZES } from "../src/config/economyConfig";
+import { spinWheelRemote } from "../src/services/gameApi";
 
 const INFO_TEXT =
   "All 8 slices look the same size, but the real odds behind them are not equal - lower-value prizes (and " +
@@ -10,7 +11,9 @@ const INFO_TEXT =
 export default function SpinWheelRoute() {
   return (
     <GameScreenShell title="Spin the Wheel" infoText={INFO_TEXT}>
-      {(handleResult) => <SpinWheel segments={SPIN_WHEEL_WEIGHTED_PRIZES} onResult={handleResult} />}
+      {(handleResult) => (
+        <SpinWheel segments={SPIN_WHEEL_WEIGHTED_PRIZES} onResult={handleResult} resolveWinner={spinWheelRemote} />
+      )}
     </GameScreenShell>
   );
 }

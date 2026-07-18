@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import {
   useFonts,
   Poppins_400Regular,
@@ -10,16 +10,42 @@ import {
   Poppins_700Bold
 } from "@expo-google-fonts/poppins";
 import { initAdNetwork } from "../src/services/adNetworkService";
+import { supabase, isSupabaseConfigured } from "../src/services/supabaseClient";
 import AppHeader from "../src/components/AppHeader/AppHeader";
 import AppMenu from "../src/components/AppMenu/AppMenu";
 import { COLORS } from "../src/theme/theme";
 
-// Switched from expo-router/drawer to a plain Stack + our own AppHeader/
-// AppMenu. The Drawer navigator was auto-switching to a permanently-visible
-// sidebar on wide viewports no matter what drawerType was set to - this
-// custom menu is fully within our control: AppMenu renders nothing at all
-// unless menuStore.isOpen is true, so there is no ambiguity about whether
-// it can show up on its own.
+// Auth gate: only active once Supabase keys exist (see .env.example). Until
+// then this resolves immediately with session=null and every screen behaves
+// exactly like the current local demo mode - nothing breaks before you add
+// real keys.
+function useAuthGate() {
+  const [session, setSession] = useState(isSupabaseConfigured ? undefined : null);
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return undefined;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || session === undefined) return;
+    const inAuthGroup = segments[0] === "login" || segments[0] === "sign-up";
+    if (!session && !inAuthGroup) {
+      router.replace("/login");
+    } else if (session && inAuthGroup) {
+      router.replace("/");
+    }
+  }, [session, segments]);
+
+  return session;
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
@@ -27,32 +53,23 @@ export default function RootLayout() {
     Poppins_600SemiBold,
     Poppins_700Bold
   });
+  const session = useAuthGate();
 
   useEffect(() => {
-    // Phase 10 - shuffles the ad-provider rotation order once per app
-    // session (see src/services/adNetworkService.js / adProviders/index.js).
     initAdNetwork();
   }, []);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || (isSupabaseConfigured && session === undefined)) {
     return <View style={styles.loadingScreen} />;
   }
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      {/* Caps the app to a phone-like width and centers it - on an actual
-          phone this is always wider than the screen so it has no visible
-          effect; on a wide desktop browser it stops the UI from stretching
-          into a "website" shape. userSelect:none also stops the browser's
-          native text-selection drag from ever hijacking scratch/drag
-          gestures anywhere in the app. */}
       <View style={styles.frameOuter}>
         <View style={[styles.frameInner, { userSelect: "none" }]}>
-          <Stack
-            screenOptions={{
-              header: (props) => <AppHeader {...props} />
-            }}
-          >
+          <Stack screenOptions={{ header: (props) => <AppHeader {...props} /> }}>
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="sign-up" options={{ headerShown: false }} />
             <Stack.Screen name="index" options={{ title: "Main Game Selection" }} />
             <Stack.Screen name="wallet" options={{ title: "Wallet" }} />
             <Stack.Screen name="exchange" options={{ title: "Exchange" }} />

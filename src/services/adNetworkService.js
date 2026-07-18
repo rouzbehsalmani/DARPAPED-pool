@@ -1,23 +1,16 @@
 // src/services/adNetworkService.js
 //
-// PHASE 10 INTEGRATION POINT + multi-provider rotation.
+// PHASE 10 INTEGRATION POINT + multi-provider rotation + server sync.
 // Every screen in the app talks to the ad network ONLY through the
 // functions exported here. Internally, this rotates through AD_PROVIDERS
-// (./adProviders/index.js) in a strict round-robin: every ad break uses the
-// NEXT provider in line, and only comes back to a provider after every
-// other provider has had a turn. This is exactly to avoid hammering one
-// network back-to-back for heavy players, which some networks flag as
-// abuse-like traffic.
-//
-// The rotation ORDER is shuffled once per app session (on initAdNetwork),
-// so it doesn't feel mechanically predictable run to run, while still
-// guaranteeing every provider gets a turn before any repeats.
-//
-// To add/remove ad networks, edit AD_PROVIDERS in ./adProviders/index.js -
-// this file's rotation logic never needs to change.
+// (./adProviders/index.js) in a strict round-robin (shuffled once per app
+// session), then - once Supabase is configured - reports the completed
+// view to the ad-reward Edge Function so the 30/30/10/30 split happens
+// server-side. Falls back to fully local simulation until then.
 
 import { detectAdTier } from "./geoTierService";
 import { AD_PROVIDERS } from "./adProviders";
+import { adRewardRemote } from "./gameApi";
 
 let initialized = false;
 let rotationOrder = [...AD_PROVIDERS];
@@ -33,8 +26,6 @@ function shuffle(list) {
 }
 
 export async function initAdNetwork() {
-  // TODO(Phase 10): initialize every real SDK here (mobileAds().initialize(),
-  // UnityAds.initialize(...), etc.) before any provider is used.
   rotationOrder = shuffle(AD_PROVIDERS);
   rotationIndex = 0;
   initialized = true;
@@ -46,28 +37,37 @@ export function isAdNetworkReady() {
 }
 
 export function getAdTier() {
-  // TODO(Phase 10): replace the locale-based guess in geoTierService with
-  // the real geo/eCPM tier the ad SDK reports for this device/session.
   return detectAdTier();
 }
 
-// Returns the provider that will serve the NEXT rewarded ad, without
-// advancing the rotation - useful for debug/logging.
 export function peekNextProvider() {
   if (rotationOrder.length === 0) return null;
   return rotationOrder[rotationIndex % rotationOrder.length];
 }
 
-// Shows a rewarded ad from whichever provider is next in the rotation,
-// then advances the rotation for next time. Resolves with
-// { success, tier, revenue, providerId }.
+// Shows a rewarded ad from whichever provider is next in the rotation, then
+// (if Supabase is configured) asks the server to apply the 30/30/10/30
+// split for this view and returns ITS revenue/tier; otherwise returns the
+// provider's own simulated revenue so local demo mode keeps working.
 export function showRewardedAd() {
   if (rotationOrder.length === 0) {
     return Promise.resolve({ success: false, revenue: 0 });
   }
   const provider = rotationOrder[rotationIndex % rotationOrder.length];
   rotationIndex = (rotationIndex + 1) % rotationOrder.length;
-  return provider.showRewardedAd();
+
+  return provider.showRewardedAd().then(async (localResult) => {
+    if (!localResult.success) return localResult;
+
+    const remote = await adRewardRemote(provider.id);
+    if (remote && remote.success) {
+      // Server already applied the split to the user's real balance -
+      // GameScreenShell's processAdResult() call after this just mirrors
+      // the same numbers into local state for an instant UI update.
+      return { success: true, revenue: remote.revenue, tier: remote.tier, providerId: provider.id };
+    }
+    return localResult;
+  });
 }
 
 // FILE LOCATION: src/services/adNetworkService.js (REPLACE existing file)
