@@ -11,14 +11,14 @@ import {
 } from "@expo-google-fonts/poppins";
 import { initAdNetwork } from "../src/services/adNetworkService";
 import { supabase, isSupabaseConfigured } from "../src/services/supabaseClient";
+import { syncProfile } from "../src/services/profileSync";
 import AppHeader from "../src/components/AppHeader/AppHeader";
 import AppMenu from "../src/components/AppMenu/AppMenu";
 import { COLORS } from "../src/theme/theme";
 
 // Auth gate: only active once Supabase keys exist (see .env.example). Until
 // then this resolves immediately with session=null and every screen behaves
-// exactly like the current local demo mode - nothing breaks before you add
-// real keys.
+// exactly like local demo mode.
 function useAuthGate() {
   const [session, setSession] = useState(isSupabaseConfigured ? undefined : null);
   const segments = useSegments();
@@ -40,6 +40,12 @@ function useAuthGate() {
       router.replace("/login");
     } else if (session && inAuthGroup) {
       router.replace("/");
+    }
+    if (session) {
+      // Pulls the REAL persisted balance/VIP status down from Supabase -
+      // this is what makes numbers survive a refresh instead of always
+      // starting back at 0 (see src/services/profileSync.js).
+      syncProfile();
     }
   }, [session, segments]);
 
@@ -76,7 +82,6 @@ export default function RootLayout() {
             <Stack.Screen name="subscription" options={{ title: "VIP Pass" }} />
             <Stack.Screen name="mega-pool" options={{ title: "Mega Pool Wheel" }} />
             <Stack.Screen name="vip-games" options={{ title: "VIP Games" }} />
-            <Stack.Screen name="debug" options={{ title: "Debug Panel" }} />
             <Stack.Screen name="settings" options={{ title: "Settings" }} />
             <Stack.Screen name="spin-wheel" options={{ title: "Spin the Wheel" }} />
             <Stack.Screen name="scratch-card" options={{ title: "Scratch Card" }} />
@@ -102,3 +107,8 @@ const styles = StyleSheet.create({
 });
 
 // FILE LOCATION: app/_layout.js (REPLACE existing file)
+// NOTE: "debug" screen removed from this Stack. Delete app/debug.js from
+// your project too (see the PowerShell command in the reply) - just
+// removing it from this list stops it from being a Stack.Screen entry with
+// custom options, but expo-router still auto-routes any file under app/,
+// so the file itself needs to go for /debug to truly disappear.

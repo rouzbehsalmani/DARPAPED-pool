@@ -11,21 +11,22 @@ export const useSettingsStore = create((set, get) => ({
   setSfxEnabled: (value) => set({ sfxEnabled: value }),
   setMusicEnabled: (value) => set({ musicEnabled: value }),
 
-  // Quick debug toggle (24h test pass) - not used by the real purchase flow.
-  setVipStatus: (value) =>
-    set(
-      value
-        ? { isVip: true, vipPlanId: "debug", vipExpiresAt: Date.now() + 24 * 60 * 60 * 1000 }
-        : { isVip: false, vipPlanId: null, vipExpiresAt: null }
-    ),
+  // Pulls the server's persisted VIP status into local state (see
+  // src/services/profileSync.js). is_vip in the database is ONLY ever
+  // flipped by supabase/functions/revenuecat-webhook after a REAL
+  // App Store/Play Store purchase - there is deliberately no client-side
+  // function left that can set isVip=true on its own anymore (that used to
+  // be possible via a debug toggle here, which was the free-VIP exploit).
+  hydrateFromProfile: (profile) =>
+    set({
+      isVip: !!profile.is_vip,
+      vipPlanId: profile.vip_plan_id || null,
+      vipExpiresAt: profile.vip_expires_at ? new Date(profile.vip_expires_at).getTime() : null
+    }),
 
-  // Called by app/subscription.js once iapService.purchaseVip() resolves.
-  activateVip: (planId, expiresAt) =>
-    set({ isVip: true, vipPlanId: planId, vipExpiresAt: expiresAt }),
-
-  cancelVip: () => set({ isVip: false, vipPlanId: null, vipExpiresAt: null }),
-
-  // Call on app start / Subscription screen mount to auto-expire a lapsed pass.
+  // Call on app start / Subscription screen mount to auto-expire a lapsed
+  // pass in the LOCAL mirror (the server's own expiry check is authoritative
+  // and will correct this on the next hydrateFromProfile anyway).
   checkVipExpiry: () => {
     const { isVip, vipExpiresAt } = get();
     if (isVip && vipExpiresAt && Date.now() > vipExpiresAt) {

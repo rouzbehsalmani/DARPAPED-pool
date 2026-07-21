@@ -52,6 +52,33 @@ export const useEconomyStore = create((set, get) => ({
 
   withdrawalRequests: [],
 
+  // True once hydrateFromProfile() has run at least once (i.e. we've
+  // actually loaded the real, persisted balance from Supabase) - lets the
+  // UI tell "genuinely zero" apart from "haven't loaded the real number
+  // yet" if you want to show a loading state anywhere.
+  isHydrated: false,
+
+  // Pulls the server's persisted balance into local state. Called once a
+  // Supabase session exists (see src/services/profileSync.js) - THIS is
+  // what makes balances survive a refresh/new session instead of always
+  // starting back at 0.
+  hydrateFromProfile: (profile) =>
+    set({
+      silver: profile.silver ?? 0,
+      gold: profile.gold ?? 0,
+      diamond: profile.diamond ?? 0,
+      arpg: profile.arpg ?? 0,
+      walletCashBalance: Number(profile.wallet_cash_balance ?? 0),
+      arpgShareAccumulated: Number(profile.arpg_share_accumulated ?? 0),
+      currentAdTier: profile.ad_tier || DEFAULT_AD_TIER,
+      detectedRegion: profile.region || "UNKNOWN",
+      gamePlayCount: profile.game_play_count ?? 0,
+      lastMegaPoolSpinAt: profile.last_mega_pool_spin_at
+        ? new Date(profile.last_mega_pool_spin_at).getTime()
+        : 0,
+      isHydrated: true
+    }),
+
   setDetectedTier: (tier, region) =>
     set({ currentAdTier: tier, detectedRegion: region }),
   setAutoSimulating: (value) => set({ isAutoSimulating: value }),
@@ -59,7 +86,9 @@ export const useEconomyStore = create((set, get) => ({
   // Core 30/30/10/30 revenue split, driven by a single ad-view's reported
   // revenue. Both the manual debug button (simulateAdView) and the real ad
   // network integration (adNetworkService.js, wired via GameScreenShell)
-  // funnel through here.
+  // funnel through here. Once Supabase is configured, the ad-reward Edge
+  // Function already applied this server-side - this just mirrors the same
+  // numbers into local state for an instant UI update.
   processAdResult: (revenueUsd) => {
     const cashCut = revenueUsd * REVENUE_SPLIT.CASH_SHARE;
     const arpgCut = revenueUsd * REVENUE_SPLIT.ARPG_SHARE;
@@ -87,7 +116,6 @@ export const useEconomyStore = create((set, get) => ({
     processAdResult(revenue);
   },
 
-  // Splits a Mega Pool win 10% team / 50% user cash / 40% user ARPG share.
   resolveMegaPoolWin: (wonAmountUsd) => {
     set((state) => {
       const amount = Math.min(wonAmountUsd, state.megaPoolAccumulated);
@@ -106,9 +134,6 @@ export const useEconomyStore = create((set, get) => ({
     });
   },
 
-  // Called by app/mega-pool.js once its own SpinWheel lands on a prize
-  // (the wheel component itself picks the winner from the weighted table -
-  // this just marks the cooldown and applies the win split).
   claimMegaPoolPrize: (amountUsd) => {
     set({ lastMegaPoolSpinAt: Date.now() });
     get().resolveMegaPoolWin(amountUsd);
@@ -119,8 +144,6 @@ export const useEconomyStore = create((set, get) => ({
     return Date.now() - lastMegaPoolSpinAt >= MEGA_POOL_SPIN_COOLDOWN_MS;
   },
 
-  // Generic mini-game prize resolver.
-  // prize: { type: "silver" | "gold" | "diamond" | "cash" | "dud", amount }
   awardPrize: (prize) => {
     if (!prize || prize.type === "dud" || !prize.amount) return;
     set((state) => {
@@ -139,8 +162,6 @@ export const useEconomyStore = create((set, get) => ({
     });
   },
 
-  // Called by every mini-game once a round finishes. Drives the simulated
-  // ad-break cadence (see GAMEPLAY_AD_INTERVAL / AdBreakModal).
   registerGamePlay: () =>
     set((state) => {
       const nextCount = state.gamePlayCount + 1;
@@ -178,9 +199,6 @@ export const useEconomyStore = create((set, get) => ({
       return { diamond: state.diamond - 10, arpg: state.arpg + 1 };
     }),
 
-  // Phase 9 - Wallet. Backed by src/services/paymentService.js (currently
-  // simulated). Withdrawal deducts the balance immediately as "pending";
-  // a real backend would only deduct once the payout is confirmed.
   requestWithdrawal: (amountUsd, methodId, destination) => {
     const { walletCashBalance } = get();
     if (!amountUsd || amountUsd <= 0 || amountUsd > walletCashBalance) {
