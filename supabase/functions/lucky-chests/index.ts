@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { getServiceClient, getAuthedUser, pickWeightedIndex } from "../_shared/authClient.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getAvailableCashBudget, filterSegmentsByCashEligibility, buildCashClaimPatch } from "../_shared/cashPrizeBudget.ts";
 
 // Mirrors src/config/economyConfig.js CHEST_PRIZE_WEIGHTS / VIP_CHEST_PRIZE_WEIGHTS.
 const CHEST_PRIZE_WEIGHTS = [
@@ -41,21 +42,24 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Not enough energy" }), { status: 400, headers: corsHeaders });
   }
 
-  const winnerIndex = pickWeightedIndex(table.map((t) => t.weight));
-  const prize = table[winnerIndex].prize;
+  const availableBudget = getAvailableCashBudget(profile);
+  const affordable = filterSegmentsByCashEligibility(table, availableBudget);
+
+  const winnerIndex = pickWeightedIndex(affordable.map((t) => t.weight));
+  const prize = affordable[winnerIndex].prize;
 
   const updates: Record<string, unknown> = { energy: Number(profile.energy) - ENERGY_PER_PLAY };
   if (prize.type === "silver") updates.silver = profile.silver + prize.amount;
   if (prize.type === "gold") updates.gold = profile.gold + prize.amount;
   if (prize.type === "diamond") updates.diamond = profile.diamond + prize.amount;
-  if (prize.type === "cash") updates.wallet_cash_balance = Number(profile.wallet_cash_balance) + prize.amount;
+  if (prize.type === "cash") Object.assign(updates, buildCashClaimPatch(profile, prize.amount));
 
   await supabase.from("profiles").update(updates).eq("id", user.id);
   await supabase.from("platform_ledger").insert({
     user_id: user.id,
     kind: "game_prize",
     amount_usd: prize.type === "cash" ? prize.amount : 0,
-    meta: { game: "lucky-chests", prize }
+    meta: { game: "lucky-chests", prize, availableBudget }
   });
 
   return new Response(JSON.stringify({ prize }), {
@@ -63,4 +67,4 @@ serve(async (req) => {
   });
 });
 
-// FILE LOCATION: supabase/functions/lucky-chests/index.ts (NEW file)
+// FILE LOCATION: supabase/functions/lucky-chests/index.ts (REPLACE existing file)

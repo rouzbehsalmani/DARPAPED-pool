@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { getServiceClient, getAuthedUser } from "../_shared/authClient.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { getAvailableCashBudget, buildCashClaimPatch } from "../_shared/cashPrizeBudget.ts";
 
 // Mirrors src/config/economyConfig.js SCRATCH_ICONS / VIP_SCRATCH_ICONS /
 // SCRATCH_ICON_PRIZES.
@@ -38,7 +39,17 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Not enough energy" }), { status: 400, headers: corsHeaders });
   }
 
-  const zones = Array.from({ length: ZONE_COUNT }, () => randomIcon(pool));
+  // Cash icons the user's budget can't currently cover are pulled out of
+  // the draw pool entirely for this play - they simply can't be landed on,
+  // the same way a "dud" card just wouldn't have that icon on it at all.
+  const availableBudget = getAvailableCashBudget(profile);
+  const drawPool = pool.filter((icon) => {
+    const prize = PRIZES[icon];
+    return prize.type !== "cash" || prize.amount <= availableBudget;
+  });
+  const effectivePool = drawPool.length > 0 ? drawPool : pool.filter((icon) => PRIZES[icon].type !== "cash");
+
+  const zones = Array.from({ length: ZONE_COUNT }, () => randomIcon(effectivePool));
   const counts: Record<string, number> = {};
   zones.forEach((icon) => {
     counts[icon] = (counts[icon] || 0) + 1;
@@ -49,7 +60,7 @@ serve(async (req) => {
   if (matchIcon) {
     prize = PRIZES[matchIcon];
   } else if (isVip) {
-    prize = PRIZES[randomIcon(pool)];
+    prize = PRIZES[randomIcon(effectivePool)];
   } else {
     prize = { type: "dud", amount: 0 };
   }
@@ -58,14 +69,14 @@ serve(async (req) => {
   if (prize.type === "silver") updates.silver = profile.silver + prize.amount;
   if (prize.type === "gold") updates.gold = profile.gold + prize.amount;
   if (prize.type === "diamond") updates.diamond = profile.diamond + prize.amount;
-  if (prize.type === "cash") updates.wallet_cash_balance = Number(profile.wallet_cash_balance) + prize.amount;
+  if (prize.type === "cash") Object.assign(updates, buildCashClaimPatch(profile, prize.amount));
 
   await supabase.from("profiles").update(updates).eq("id", user.id);
   await supabase.from("platform_ledger").insert({
     user_id: user.id,
     kind: "game_prize",
     amount_usd: prize.type === "cash" ? prize.amount : 0,
-    meta: { game: "scratch-card", zones, prize }
+    meta: { game: "scratch-card", zones, prize, availableBudget }
   });
 
   return new Response(JSON.stringify({ zones, prize }), {
@@ -73,4 +84,4 @@ serve(async (req) => {
   });
 });
 
-// FILE LOCATION: supabase/functions/scratch-card/index.ts (NEW file)
+// FILE LOCATION: supabase/functions/scratch-card/index.ts (REPLACE existing file)

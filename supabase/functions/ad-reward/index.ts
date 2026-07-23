@@ -4,7 +4,16 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 // Mirrors src/config/economyConfig.js AD_REVENUE_BY_TIER / REVENUE_SPLIT -
 // the core 30/30/10/30 split, applied server-side every time a rewarded ad
-// finishes (called from GameScreenShell's AdBreakModal completion).
+// finishes.
+//
+// CHANGED: the 30% "cash" cut no longer credits wallet_cash_balance
+// directly. It now credits cash_prize_budget_total instead - the pool that
+// src/../_shared/cashPrizeBudget.ts draws from when a mini-game rolls a
+// cash-type prize. The user's real, withdrawable wallet balance now only
+// grows when they actually WIN a cash prize inside a game (or the Mega
+// Pool), matching the original "30% Direct Cash Pool: users WIN cash
+// rewards in tiers" design - watching an ad earns the CHANCE at that cash,
+// it doesn't hand it over directly anymore.
 const AD_REVENUE_BY_TIER: Record<string, number> = {
   TIER_1: 0.02,
   TIER_2: 0.01,
@@ -40,7 +49,7 @@ serve(async (req) => {
   await supabase
     .from("profiles")
     .update({
-      wallet_cash_balance: Number(profile.wallet_cash_balance) + cashCut,
+      cash_prize_budget_total: Number(profile.cash_prize_budget_total ?? 0) + cashCut,
       arpg_share_accumulated: remainder,
       arpg: profile.arpg + tokensEarned
     })
@@ -55,7 +64,7 @@ serve(async (req) => {
     user_id: user.id,
     kind: "ad_view",
     amount_usd: revenue,
-    meta: { providerId, tier }
+    meta: { providerId, tier, cashCutAddedToBudget: cashCut }
   });
 
   return new Response(JSON.stringify({ success: true, revenue, tier }), {
@@ -63,4 +72,4 @@ serve(async (req) => {
   });
 });
 
-// FILE LOCATION: supabase/functions/ad-reward/index.ts (NEW file)
+// FILE LOCATION: supabase/functions/ad-reward/index.ts (REPLACE existing file)
