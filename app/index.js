@@ -1,55 +1,53 @@
-import React, { useRef } from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import React from "react";
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from "react-native";
 import TopBar from "../src/components/TopBar/TopBar";
+import GameTile from "../src/components/GameTile/GameTile";
+import { useSettingsStore } from "../src/store/settingsStore";
+import { COLORS, FONTS, SPACING } from "../src/theme/theme";
 
-const GAMES = [
-  { key: "spin-wheel", label: "Spin the Wheel", desc: "8-segment fortune wheel - materials + small cash", route: "/spin-wheel" },
-  { key: "scratch-card", label: "Scratch Card", desc: "Reveal a grid of icons, match 3 to win", route: "/scratch-card" },
-  { key: "slot-machine", label: "Slot Machine", desc: "3-reel classic slots with lever pull", route: "/slot-machine" },
-  { key: "lucky-chests", label: "Lucky Chests", desc: "Pick 1 of 9 chests for a random prize", route: "/lucky-chests" }
+// Top row: the 4 standard games, always unlocked.
+// Bottom row: their VIP zero-dud counterparts - grayscale + locked unless
+// the player has an active VIP Pass (see GameTile.js for the locked
+// hover/tap behavior).
+const STANDARD_GAMES = [
+  { gameId: "spin-wheel", label: "Spin Wheel", route: "/spin-wheel" },
+  { gameId: "scratch-card", label: "Scratch Card", route: "/scratch-card" },
+  { gameId: "slot-machine", label: "Slot Machine", route: "/slot-machine" },
+  { gameId: "lucky-chests", label: "Lucky Chests", route: "/lucky-chests" }
+];
+const VIP_GAMES = [
+  { gameId: "spin-wheel", label: "VIP Spin Wheel", route: "/vip-spin-wheel" },
+  { gameId: "scratch-card", label: "VIP Scratch Card", route: "/vip-scratch-card" },
+  { gameId: "slot-machine", label: "VIP Slot Machine", route: "/vip-slot-machine" },
+  { gameId: "lucky-chests", label: "VIP Lucky Chests", route: "/vip-lucky-chests" }
 ];
 
 export default function MainGameSelectionRoute() {
-  const arpgCounterRef = useRef(null);
-  const router = useRouter();
+  const isVip = useSettingsStore((s) => s.isVip);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <TopBar arpgCounterRef={arpgCounterRef} />
+      <TopBar />
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>Choose a Game</Text>
-
-        {GAMES.map((game) => (
-          <TouchableOpacity
-            key={game.key}
-            style={styles.card}
-            activeOpacity={0.8}
-            onPress={() => router.push(game.route)}
-          >
-            <Text style={styles.cardTitle}>{game.label}</Text>
-            <Text style={styles.cardDesc}>{game.desc}</Text>
-          </TouchableOpacity>
-        ))}
+        <Text style={styles.title}>Play a Game</Text>
+        <View style={styles.grid}>
+          {STANDARD_GAMES.map((g) => (
+            <GameTile key={g.route} gameId={g.gameId} label={g.label} route={g.route} locked={false} />
+          ))}
+          {VIP_GAMES.map((g) => (
+            <GameTile key={g.route} gameId={g.gameId} label={g.label} route={g.route} locked={!isVip} />
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#0F0F1E" },
-  body: { padding: 20 },
-  title: { color: "#FFFFFF", fontSize: 18, fontWeight: "700", marginBottom: 16 },
-  card: {
-    backgroundColor: "#1A1A2E",
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#26264A"
-  },
-  cardTitle: { color: "#FFD700", fontSize: 16, fontWeight: "700", marginBottom: 4 },
-  cardDesc: { color: "#AAAAC0", fontSize: 12 }
+  safeArea: { flex: 1, backgroundColor: COLORS.bgDark },
+  body: { padding: SPACING.lg },
+  title: { color: COLORS.textPrimary, fontFamily: FONTS.bold, fontSize: 16, marginBottom: 12 },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }
 });
 
 // FILE LOCATION: app/index.js (REPLACE existing file)
