@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import TopBar from "../TopBar/TopBar";
+import GameSwitcherStrip from "../GameSwitcherStrip/GameSwitcherStrip";
 import PrizeResultModal from "../PrizeResultModal/PrizeResultModal";
 import AdBreakModal from "../AdBreakModal/AdBreakModal";
 import VipLockedNotice from "../VipLockedNotice/VipLockedNotice";
@@ -22,18 +23,21 @@ const formatCountdown = (ms) => {
 };
 
 // Shared shell used by every mini-game route. Centralizes:
-// - TopBar + title + per-game "You should know" info popup
+// - TopBar (balances) + GameSwitcherStrip (one-tap jump to any other game
+//   or its VIP version, right below the balances - this is what lets the
+//   player switch games without ever going back out to the menu)
+// - title + per-game "You should know" info popup
 // - VIP gating (requireVip)
 // - Prize award + result modal
-// - Simulated ad-break cadence (registerGamePlay / AdBreakModal)
+// - Simulated ad-break cadence
 // - Energy/stamina cooldown gate
 //
-// Layout is a ROW: [game column] [energy column].
-// - energyColumn: the FULL height of the body, dedicated only to the
-//   energy gauge (matches how tall it used to be before it got squeezed).
-// - gameColumn: split vertically 75/25 - the game itself on top, and an
-//   internal self-promo banner filling the leftover space at the bottom
-//   (instead of leaving it empty).
+// Layout, top to bottom: TopBar -> GameSwitcherStrip -> [game column | energy
+// column], with the game column itself split 75/25 into the actual game
+// and an internal self-promo banner. Adding the switcher strip above this
+// took a bit of the game column's own vertical room, which is intentional -
+// the strip is deliberately compact (a single row of small icons) so it
+// doesn't crowd out the game itself.
 //
 // Usage:
 //   <GameScreenShell title="Spin the Wheel" infoText="...">
@@ -64,8 +68,6 @@ const GameScreenShell = ({
   const [modalVisible, setModalVisible] = useState(false);
   const [, setTick] = useState(0);
 
-  // Ticks once a second purely to re-evaluate the energy gate below, since
-  // energy regenerates lazily (only recomputed when read).
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
@@ -97,6 +99,7 @@ const GameScreenShell = ({
   return (
     <SafeAreaView style={styles.safeArea}>
       <TopBar arpgCounterRef={arpgCounterRef} />
+      <GameSwitcherStrip />
       <LinearGradient colors={GRADIENTS.background} style={styles.bodyRow}>
         <View style={styles.gameColumn}>
           <View style={styles.gameArea}>
@@ -129,12 +132,7 @@ const GameScreenShell = ({
         </View>
       </LinearGradient>
 
-      <PrizeResultModal
-        visible={modalVisible}
-        prize={resultPrize}
-        onClose={() => setModalVisible(false)}
-      />
-
+      <PrizeResultModal visible={modalVisible} prize={resultPrize} onClose={() => setModalVisible(false)} />
       <AdBreakModal visible={adBreakPending} onComplete={handleAdBreakComplete} />
     </SafeAreaView>
   );
@@ -151,7 +149,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: FONTS.bold, fontSize: 19 },
   subtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 12, marginBottom: 8, alignSelf: "flex-start" },
   rechargeCard: {
-    marginTop: 60,
+    marginTop: 40,
     backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.lg,
     padding: 24,
